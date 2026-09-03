@@ -1,0 +1,13 @@
+{
+  "name": "nepalgunj-skin-center-hair-transplant",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": { "next": "15.5.7", "react": "19.0.0", "react-dom": "19.0.0", "zod": "^3.24.2" },
+  "devDependencies": { "@types/node": "^22", "@types/react": "^19", "@types/react-dom": "^19", "eslint": "^9", "eslint-config-next": "15.5.7", "typescript": "^5", "vitest": "^3.0.9" }
+}
