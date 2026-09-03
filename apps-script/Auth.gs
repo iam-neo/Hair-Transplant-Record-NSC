@@ -1,5 +1,18 @@
 // ── Run these from the editor (dropdown → ▶ Run) ──────────────────
 function SETUP_ADMIN() { return setupTemporaryTestAdmin_(); }
+function RESET_ADMIN_PASSWORD() {
+  var s = sheet_('Users'), v = s.getDataRange().getValues(), h = v[0];
+  var uCol = h.indexOf('Username'), passCol = h.indexOf('PasswordHash'), saltCol = h.indexOf('PasswordSalt');
+  for (var i = 1; i < v.length; i++) {
+    if (v[i][uCol] === 'nsc-admin') {
+      var salt = Utilities.getUuid();
+      s.getRange(i + 1, saltCol + 1).setValue(salt);
+      s.getRange(i + 1, passCol + 1).setValue(hashPassword_('NSC-Test!2026-Setup', salt));
+      return 'Password for nsc-admin successfully updated with the new fast hash!';
+    }
+  }
+  return setupTemporaryTestAdmin_();
+}
 function INITIALIZE() { return initialize_({spreadsheetName:'NSC Hair Transplant Data'}); }
 
 function bytesToHex_(bytes){return bytes.map(function(b){var v=(b+256)%256;return ('0'+v.toString(16)).slice(-2);}).join('');}

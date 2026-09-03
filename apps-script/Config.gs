@@ -1,6 +1,6 @@
 var NSC_CONFIG = {
   clinicName: 'Nepalgunj Skin Center', rootFolderName: 'Nepalgunj Skin Center',
-  sessionHours: 6, passwordIterations: 120000,
+  sessionHours: 6, passwordIterations: 1000,
   sheets: {
     Users: ['UserID','FullName','Email','Username','PasswordHash','PasswordSalt','Role','Permissions','Status','CreatedAt','UpdatedAt'],
     Patients: ['PatientID','FullName','DateOfBirth','Gender','ContactNumber','Email','Address','RegistrationDate','RegisteredBy','Status','Notes','CreatedAt','UpdatedAt'],
