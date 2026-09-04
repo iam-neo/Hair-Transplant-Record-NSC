@@ -19,11 +19,11 @@ interface StaffUser {
 }
 
 const configs: Record<string, Config> = {
-  consultations: { title: 'Consultations', action: 'consultations', idColumn: 'ConsultationID', fields: [{ name: 'patientId', label: 'Patient' }, { name: 'consultationDate', label: 'Consultation date', type: 'date' }, { name: 'doctor', label: 'Doctor' }, { name: 'mainConcern', label: 'Main concern' }, { name: 'consultationNotes', label: 'Clinical notes', type: 'textarea' }, { name: 'recommendation', label: 'Recommendation', type: 'textarea' }], columns: ['ConsultationID', 'PatientID', 'ConsultationDate', 'Doctor', 'MainConcern'] },
-  assessments: { title: 'Assessments', action: 'assessments', idColumn: 'AssessmentID', fields: [{ name: 'patientId', label: 'Patient' }, { name: 'assessmentDate', label: 'Assessment date', type: 'date' }, { name: 'doctor', label: 'Doctor' }, { name: 'hairLossPattern', label: 'Hair-loss pattern' }, { name: 'norwoodClassification', label: 'Norwood classification' }, { name: 'frontalGrafts', label: 'Frontal estimated grafts', type: 'number' }, { name: 'midScalpGrafts', label: 'Mid-scalp estimated grafts', type: 'number' }, { name: 'crownGrafts', label: 'Crown estimated grafts', type: 'number' }, { name: 'clinicalNotes', label: 'Clinical notes', type: 'textarea' }], columns: ['AssessmentID', 'PatientID', 'AssessmentDate', 'Doctor', 'NorwoodClassification', 'EstimatedGrafts'] },
-  procedures: { title: 'Procedures', action: 'procedures', idColumn: 'ProcedureID', fields: [{ name: 'patientId', label: 'Patient' }, { name: 'procedureDate', label: 'Procedure date', type: 'date' }, { name: 'doctor', label: 'Doctor' }, { name: 'procedureType', label: 'Procedure type' }, { name: 'plannedGrafts', label: 'Planned grafts', type: 'number' }, { name: 'harvestedGrafts', label: 'Harvested grafts', type: 'number' }, { name: 'implantedGrafts', label: 'Implanted grafts', type: 'number' }, { name: 'procedureStatus', label: 'Status', options: ['Planned', 'Scheduled', 'In Progress', 'Completed', 'Cancelled', 'Rescheduled'] }, { name: 'procedureNotes', label: 'Procedure notes', type: 'textarea' }], columns: ['ProcedureID', 'PatientID', 'ProcedureDate', 'Doctor', 'ProcedureStatus', 'ImplantedGrafts'] },
-  followups: { title: 'Follow-ups', action: 'followups', idColumn: 'FollowUpID', fields: [{ name: 'patientId', label: 'Patient' }, { name: 'followUpDate', label: 'Follow-up date', type: 'date' }, { name: 'followUpTime', label: 'Follow-up time (optional)', type: 'time' }, { name: 'followUpType', label: 'Type', options: ['Day 1', 'Week 1', 'Month 1', 'Month 3', 'Month 6', 'Year 1', 'Other'] }, { name: 'assignedTo', label: 'Assigned to' }, { name: 'notes', label: 'Notes', type: 'textarea' }], columns: ['FollowUpID', 'PatientID', 'FollowUpDate', 'FollowUpType', 'Status', 'AssignedTo'] },
-  payments: { title: 'Payments', action: 'payments', idColumn: 'PaymentID', fields: [{ name: 'patientId', label: 'Patient' }, { name: 'paymentDate', label: 'Payment date', type: 'date' }, { name: 'amount', label: 'Amount (NPR)', type: 'number' }, { name: 'method', label: 'Method', options: ['Cash', 'Card', 'Bank transfer', 'Mobile payment', 'Other'] }, { name: 'reference', label: 'Reference' }, { name: 'notes', label: 'Notes', type: 'textarea' }], columns: ['PaymentID', 'PatientID', 'PaymentDate', 'Amount', 'Method', 'Reference'] }
+  consultations: { title: 'Consultations', action: 'consultations', idColumn: 'ConsultationID', fields: [{ name: 'patientId', label: 'Patient' }, { name: 'consultationDate', label: 'Consultation date', type: 'date' }, { name: 'doctor', label: 'Doctor' }, { name: 'mainConcern', label: 'Main concern' }, { name: 'consultationNotes', label: 'Clinical notes', type: 'textarea' }, { name: 'recommendation', label: 'Recommendation', type: 'textarea' }], columns: ['PatientID', 'ConsultationDate', 'Doctor', 'MainConcern', 'ConsultationID'] },
+  assessments: { title: 'Assessments', action: 'assessments', idColumn: 'AssessmentID', fields: [{ name: 'patientId', label: 'Patient' }, { name: 'assessmentDate', label: 'Assessment date', type: 'date' }, { name: 'doctor', label: 'Doctor' }, { name: 'hairLossPattern', label: 'Hair-loss pattern' }, { name: 'norwoodClassification', label: 'Norwood classification' }, { name: 'frontalGrafts', label: 'Frontal estimated grafts', type: 'number' }, { name: 'midScalpGrafts', label: 'Mid-scalp estimated grafts', type: 'number' }, { name: 'crownGrafts', label: 'Crown estimated grafts', type: 'number' }, { name: 'clinicalNotes', label: 'Clinical notes', type: 'textarea' }], columns: ['PatientID', 'AssessmentDate', 'Doctor', 'NorwoodClassification', 'EstimatedGrafts', 'AssessmentID'] },
+  procedures: { title: 'Procedures', action: 'procedures', idColumn: 'ProcedureID', fields: [{ name: 'patientId', label: 'Patient' }, { name: 'procedureDate', label: 'Procedure date', type: 'date' }, { name: 'doctor', label: 'Doctor' }, { name: 'procedureType', label: 'Procedure type' }, { name: 'plannedGrafts', label: 'Planned grafts', type: 'number' }, { name: 'harvestedGrafts', label: 'Harvested grafts', type: 'number' }, { name: 'implantedGrafts', label: 'Implanted grafts', type: 'number' }, { name: 'procedureStatus', label: 'Status', options: ['Planned', 'Scheduled', 'In Progress', 'Completed', 'Cancelled', 'Rescheduled'] }, { name: 'procedureNotes', label: 'Procedure notes', type: 'textarea' }], columns: ['PatientID', 'ProcedureDate', 'Doctor', 'ProcedureStatus', 'ImplantedGrafts', 'ProcedureID'] },
+  followups: { title: 'Follow-ups', action: 'followups', idColumn: 'FollowUpID', fields: [{ name: 'patientId', label: 'Patient' }, { name: 'followUpDate', label: 'Follow-up date', type: 'date' }, { name: 'followUpTime', label: 'Follow-up time (optional)', type: 'time' }, { name: 'followUpType', label: 'Type', options: ['Day 1', 'Week 1', 'Month 1', 'Month 3', 'Month 6', 'Year 1', 'Other'] }, { name: 'assignedTo', label: 'Assigned to' }, { name: 'notes', label: 'Notes', type: 'textarea' }], columns: ['PatientID', 'FollowUpDate', 'FollowUpType', 'Status', 'AssignedTo', 'FollowUpID'] },
+  payments: { title: 'Payments', action: 'payments', idColumn: 'PaymentID', fields: [{ name: 'patientId', label: 'Patient' }, { name: 'paymentDate', label: 'Payment date', type: 'date' }, { name: 'amount', label: 'Amount (NPR)', type: 'number' }, { name: 'method', label: 'Method', options: ['Cash', 'Card', 'Bank transfer', 'Mobile payment', 'Other'] }, { name: 'reference', label: 'Reference' }, { name: 'notes', label: 'Notes', type: 'textarea' }], columns: ['PatientID', 'PaymentDate', 'Amount', 'Method', 'Reference', 'PaymentID'] }
 };
 
 export function RecordWorkspace({ module }: { module: string }) {
@@ -58,17 +58,19 @@ export function RecordWorkspace({ module }: { module: string }) {
   const session = sessionStore.get();
 
   const load = () => {
-    if (session && config) {
-      api<{ items: Record<string, string>[] }>(config.action + '.list', {}, session.token)
-        .then(x => setItems(x.items))
+    const s = sessionStore.get();
+    const token = s?.token;
+    if (token && config) {
+      api<{ items: Record<string, string>[] }>(config.action + '.list', {}, token)
+        .then(x => setItems(x.items || []))
         .catch(e => setError(e.message));
       
-      api<{ items: Patient[] }>('patients.list', { limit: 200 }, session.token)
+      api<{ items: Patient[] }>('patients.list', { limit: 1000 }, token)
         .then(res => setPatients(res.items || []))
         .catch(() => {});
 
       if (module === 'followups') {
-        api<{ items: StaffUser[] }>('users.list', {}, session.token)
+        api<{ items: StaffUser[] }>('users.list', {}, token)
           .then(res => {
             const activeStaff = (res.items || []).filter(u => u.status === 'Active' && u.email);
             setStaffList(activeStaff);
@@ -87,11 +89,23 @@ export function RecordWorkspace({ module }: { module: string }) {
         setOpen(true);
       }
     }
-  }, []);
+  }, [module]);
 
   const patientMap = useMemo(() => {
     const map: Record<string, Patient> = {};
-    patients.forEach(p => { map[p.id] = p; });
+    patients.forEach(p => {
+      if (!p) return;
+      if (p.id) {
+        const idStr = String(p.id).trim();
+        map[idStr] = p;
+        map[idStr.toLowerCase()] = p;
+      }
+      if ((p as any).PatientID) {
+        const pIdStr = String((p as any).PatientID).trim();
+        map[pIdStr] = p;
+        map[pIdStr.toLowerCase()] = p;
+      }
+    });
     return map;
   }, [patients]);
 
@@ -256,29 +270,72 @@ export function RecordWorkspace({ module }: { module: string }) {
           <table className="table">
             <thead>
               <tr>
-                {config.columns.map(c => <th key={c}>{c.replace(/([A-Z])/g, ' $1')}</th>)}
+                {config.columns.map(c => (
+                  <th key={c}>
+                    {c === 'PatientID'
+                      ? 'Patient Name'
+                      : c === 'ConsultationID'
+                      ? 'Consultation ID'
+                      : c === 'AssessmentID'
+                      ? 'Assessment ID'
+                      : c === 'ProcedureID'
+                      ? 'Procedure ID'
+                      : c === 'FollowUpID'
+                      ? 'Follow-up ID'
+                      : c === 'PaymentID'
+                      ? 'Payment ID'
+                      : c === 'EstimatedGrafts'
+                      ? 'Est. Grafts'
+                      : c === 'ImplantedGrafts'
+                      ? 'Imp. Grafts'
+                      : c.replace(/([A-Z])/g, ' $1').trim()}
+                  </th>
+                ))}
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {items.length ? items.map((r, i) => (
                 <tr key={r[config.columns[0]] || i}>
-                  {config.columns.map(c => (
-                    <td key={c}>
-                      {c === 'PatientID' ? (
-                        <div>
-                          <strong style={{ color: 'var(--navy)' }}>{r[c]}</strong>
-                          {patientMap[r[c]] && (
-                            <div style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 500 }}>
-                              {patientMap[r[c]].fullName}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        r[c] || '—'
-                      )}
-                    </td>
-                  ))}
+                  {config.columns.map(c => {
+                    if (c === 'PatientID') {
+                      const pid = String(r[c] || '').trim();
+                      const p = patientMap[pid] || patientMap[pid.toLowerCase()];
+                      return (
+                        <td key={c}>
+                          <div style={{ fontWeight: 700, color: 'var(--navy)', fontSize: '13.5px' }}>
+                            👤 {p?.fullName || pid || '—'}
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 500 }}>
+                            ID: {pid} {p?.contactNumber ? `• 📞 ${p.contactNumber}` : ''}
+                          </div>
+                        </td>
+                      );
+                    }
+                    if (c === 'Amount') {
+                      return (
+                        <td key={c}>
+                          <strong style={{ color: '#047857', fontSize: '13.5px' }}>
+                            NPR {Number(r[c] || 0).toLocaleString()}
+                          </strong>
+                        </td>
+                      );
+                    }
+                    if (c.endsWith('ID')) {
+                      return (
+                        <td key={c}>
+                          <span style={{ fontSize: '11.5px', color: 'var(--muted)', fontFamily: 'monospace', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>
+                            {r[c] || '—'}
+                          </span>
+                        </td>
+                      );
+                    }
+                    return (
+                      <td key={c}>
+                        {r[c] || '—'}
+                      </td>
+                    );
+                  })}
                   <td className="row-actions">
                     <button className="btn-icon" title="Edit" onClick={() => startEdit(r)}>✏️</button>
                     <button className="btn-icon" title="Delete" onClick={() => setDeleteTarget({ id: r[config.idColumn], label: r[config.idColumn] })}>🗑️</button>

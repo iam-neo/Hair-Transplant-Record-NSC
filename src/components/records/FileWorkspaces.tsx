@@ -275,7 +275,7 @@ export function FilesWorkspace({ kind }: { kind: 'photos' | 'documents' }) {
       .then(r => { setItems(r.items); setSessions(r.sessions || []); })
       .catch(e => setError(e.message));
 
-    api<{ items: Patient[] }>('patients.list', { limit: 200 }, token)
+    api<{ items: Patient[] }>('patients.list', { limit: 1000 }, token)
       .then(res => setPatients(res.items || []))
       .catch(() => {});
   }, [photo]);                          // <-- only depends on `photo`, not `s`
@@ -294,7 +294,19 @@ export function FilesWorkspace({ kind }: { kind: 'photos' | 'documents' }) {
 
   const patientMap = useMemo(() => {
     const map: Record<string, Patient> = {};
-    patients.forEach(p => { map[p.id] = p; });
+    patients.forEach(p => {
+      if (!p) return;
+      if (p.id) {
+        const idStr = String(p.id).trim();
+        map[idStr] = p;
+        map[idStr.toLowerCase()] = p;
+      }
+      if ((p as any).PatientID) {
+        const pIdStr = String((p as any).PatientID).trim();
+        map[pIdStr] = p;
+        map[pIdStr.toLowerCase()] = p;
+      }
+    });
     return map;
   }, [patients]);
 
@@ -656,79 +668,87 @@ export function FilesWorkspace({ kind }: { kind: 'photos' | 'documents' }) {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Patient</th>
-                  <th>File Name</th>
+                  <th>Patient Name</th>
                   <th>{photo ? 'Timeline & Angle' : 'Category'}</th>
                   {photo && <th>Date Clicked</th>}
+                  <th>File / Preview</th>
                   <th>Uploaded At</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {items.length ? items.map(x => (
-                  <tr key={x.PhotoID || x.DocumentID}>
-                    <td>
-                      <strong style={{ color: 'var(--navy)' }}>{x.PatientID}</strong>
-                      {patientMap[x.PatientID] && (
-                        <div style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 500 }}>
-                          {patientMap[x.PatientID].fullName}
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      <span
-                        style={{ cursor: 'pointer', color: 'var(--primary-dark)', fontWeight: 600 }}
-                        onClick={() => setPreviewTarget(x as unknown as (PhotoRecord | DocumentRecord))}
-                        title="Click to preview"
-                      >
-                        {x.FileName}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                        {x.SessionType && (
-                          <span className="badge" style={{ fontSize: '10.5px', alignSelf: 'flex-start' }}>
-                            {x.SessionType}
-                          </span>
-                        )}
-                        <span style={{ fontSize: '12px', fontWeight: 600 }}>
-                          {x.Category || x.DocumentType}
-                        </span>
-                      </div>
-                    </td>
-                    {photo && (
+                {items.length ? items.map(x => {
+                  const pid = String(x.PatientID || '').trim();
+                  const p = patientMap[pid] || patientMap[pid.toLowerCase()];
+                  const patientName = p?.fullName || pid;
+                  return (
+                    <tr key={x.PhotoID || x.DocumentID}>
                       <td>
-                        <strong style={{ color: 'var(--ink)' }}>
-                          {x.PhotoDate || (x.CreatedAt ? String(x.CreatedAt).slice(0, 10) : '—')}
-                        </strong>
+                        <div style={{ fontWeight: 700, color: 'var(--navy)', fontSize: '13.5px' }}>
+                          👤 {patientName}
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 500 }}>
+                          ID: {x.PatientID}
+                        </div>
                       </td>
-                    )}
-                    <td>{x.CreatedAt}</td>
-                    <td className="row-actions">
-                      <button
-                        className="btn-icon"
-                        title="Preview file"
-                        onClick={() => setPreviewTarget(x as unknown as (PhotoRecord | DocumentRecord))}
-                      >
-                        👁️
-                      </button>
-                      <button
-                        className="btn-icon"
-                        title="Edit metadata"
-                        onClick={() => setEditTarget(x as unknown as (PhotoRecord | DocumentRecord))}
-                      >
-                        ✏️
-                      </button>
-                      <button
-                        className="btn-icon"
-                        title="Delete"
-                        onClick={() => setDeleteTarget({ id: x.PhotoID || x.DocumentID, label: x.FileName })}
-                      >
-                        🗑️
-                      </button>
-                    </td>
-                  </tr>
-                )) : <tr><td colSpan={photo ? 6 : 5} className="empty">No files yet.</td></tr>}
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          {x.SessionType && (
+                            <span className="badge" style={{ fontSize: '10.5px', alignSelf: 'flex-start' }}>
+                              {x.SessionType}
+                            </span>
+                          )}
+                          <span style={{ fontSize: '12px', fontWeight: 600 }}>
+                            {x.Category || x.DocumentType}
+                          </span>
+                        </div>
+                      </td>
+                      {photo && (
+                        <td>
+                          <strong style={{ color: 'var(--ink)' }}>
+                            {x.PhotoDate || (x.CreatedAt ? String(x.CreatedAt).slice(0, 10) : '—')}
+                          </strong>
+                        </td>
+                      )}
+                      <td>
+                        <span
+                          style={{ cursor: 'pointer', color: 'var(--primary-dark)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                          onClick={() => setPreviewTarget(x as unknown as (PhotoRecord | DocumentRecord))}
+                          title="Click to preview"
+                        >
+                          <span>{photo ? '📸' : '📄'}</span>
+                          <span style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {x.FileName}
+                          </span>
+                        </span>
+                      </td>
+                      <td>{x.CreatedAt ? String(x.CreatedAt).slice(0, 16) : '—'}</td>
+                      <td className="row-actions">
+                        <button
+                          className="btn-icon"
+                          title="Preview file"
+                          onClick={() => setPreviewTarget(x as unknown as (PhotoRecord | DocumentRecord))}
+                        >
+                          👁️
+                        </button>
+                        <button
+                          className="btn-icon"
+                          title="Edit metadata"
+                          onClick={() => setEditTarget(x as unknown as (PhotoRecord | DocumentRecord))}
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          className="btn-icon"
+                          title="Delete"
+                          onClick={() => setDeleteTarget({ id: x.PhotoID || x.DocumentID, label: x.FileName })}
+                        >
+                          🗑️
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                }) : <tr><td colSpan={photo ? 6 : 5} className="empty">No files yet.</td></tr>}
               </tbody>
             </table>
           </div>
