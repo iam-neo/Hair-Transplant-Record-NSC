@@ -8,4 +8,10 @@ export async function api<T>(action: string, payload: Record<string, unknown> = 
   if (!result.ok) throw new ApiError(result.error || "The request could not be completed.", result.code);
   return result.data as T;
 }
-export const authApi = { login: (identity: string, password: string) => api<{ token: string; user: SessionUser }>("auth.login", { identity, password }), logout: (token: string) => api("auth.logout", {}, token), me: (token: string) => api<SessionUser>("auth.me", {}, token) };
+export const authApi = {
+  login: (identity: string, password: string) => api<{ token: string; user: SessionUser }>("auth.login", { identity, password }),
+  logout: (token: string) => api("auth.logout", {}, token),
+  me: (token: string) => api<SessionUser>("auth.me", {}, token),
+  changePassword: (token: string, currentPassword: string, newPassword: string) => api<{ message: string }>("auth.changePassword", { currentPassword, newPassword }, token),
+  updateProfile: (token: string, fullName: string, username: string) => api<{ user: SessionUser }>("auth.updateProfile", { fullName, username }, token),
+};
