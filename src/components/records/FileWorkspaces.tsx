@@ -8,6 +8,7 @@ import { PatientSelect } from "@/components/ui/PatientSelect";
 import { FilePreviewModal } from "./FilePreviewModal";
 import { FileEditModal } from "./FileEditModal";
 import { TimelineMatrix } from "./TimelineMatrix";
+import { DocumentDossier } from "./DocumentDossier";
 import type { Patient, PhotoRecord, DocumentRecord } from "@/types";
 
 /* ─── Helpers ─── */
@@ -219,8 +220,8 @@ export function FilesWorkspace({ kind }: { kind: 'photos' | 'documents' }) {
   const slots = photo ? PHOTO_SLOTS : DOCUMENT_SLOTS;
   const accept = photo ? 'image/jpeg,image/png,image/webp' : 'application/pdf,image/*';
 
-  // Navigation tab for photos
-  const [viewTab, setViewTab] = useState<'upload' | 'matrix' | 'register'>('upload');
+  // Navigation tab (photos: matrix / upload / register; documents: dossier / upload / register)
+  const [viewTab, setViewTab] = useState<'upload' | 'matrix' | 'dossier' | 'register'>(photo ? 'upload' : 'dossier');
 
   const [items, setItems] = useState<Record<string, string>[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -286,6 +287,7 @@ export function FilesWorkspace({ kind }: { kind: 'photos' | 'documents' }) {
       if (pId) {
         setPatientId(pId);
         if (photo) setViewTab('matrix');
+        else setViewTab('dossier');
       }
     }
   }, [load, photo]);
@@ -404,7 +406,12 @@ export function FilesWorkspace({ kind }: { kind: 'photos' | 'documents' }) {
 
     if (failCount === 0) {
       setFeedback(`✅ All ${successCount} file(s) uploaded successfully!`);
-      setTimeout(() => { resetAll(); load(); }, 1200);
+      setTimeout(() => {
+        resetAll();
+        load();
+        if (photo) setViewTab('matrix');
+        else setViewTab('dossier');
+      }, 1200);
     } else {
       setError(`${failCount} file(s) failed to upload. ${successCount} succeeded. Please retry the failed ones.`);
       load();
@@ -438,32 +445,58 @@ export function FilesWorkspace({ kind }: { kind: 'photos' | 'documents' }) {
       )}
       {error && <div className="form-error">{error}</div>}
 
-      {/* Photo Workspace View Switcher Tabs */}
-      {photo && (
-        <div className="view-tabs">
-          <button
-            type="button"
-            className={`view-tab-btn ${viewTab === 'upload' ? 'active' : ''}`}
-            onClick={() => setViewTab('upload')}
-          >
-            📸 Multi-Slot Upload
-          </button>
-          <button
-            type="button"
-            className={`view-tab-btn ${viewTab === 'matrix' ? 'active' : ''}`}
-            onClick={() => setViewTab('matrix')}
-          >
-            📊 Timeline Comparison Matrix
-          </button>
-          <button
-            type="button"
-            className={`view-tab-btn ${viewTab === 'register' ? 'active' : ''}`}
-            onClick={() => setViewTab('register')}
-          >
-            📋 Photo Register ({items.length})
-          </button>
-        </div>
-      )}
+      {/* Workspace View Switcher Tabs */}
+      <div className="view-tabs">
+        {photo ? (
+          <>
+            <button
+              type="button"
+              className={`view-tab-btn ${viewTab === 'matrix' ? 'active' : ''}`}
+              onClick={() => setViewTab('matrix')}
+            >
+              📊 Timeline Comparison Matrix
+            </button>
+            <button
+              type="button"
+              className={`view-tab-btn ${viewTab === 'upload' ? 'active' : ''}`}
+              onClick={() => setViewTab('upload')}
+            >
+              📸 Multi-Slot Upload
+            </button>
+            <button
+              type="button"
+              className={`view-tab-btn ${viewTab === 'register' ? 'active' : ''}`}
+              onClick={() => setViewTab('register')}
+            >
+              📋 Photo Register ({items.length})
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              className={`view-tab-btn ${viewTab === 'dossier' ? 'active' : ''}`}
+              onClick={() => setViewTab('dossier')}
+            >
+              📁 Patient Document Dossier
+            </button>
+            <button
+              type="button"
+              className={`view-tab-btn ${viewTab === 'upload' ? 'active' : ''}`}
+              onClick={() => setViewTab('upload')}
+            >
+              📄 Multi-Slot Upload
+            </button>
+            <button
+              type="button"
+              className={`view-tab-btn ${viewTab === 'register' ? 'active' : ''}`}
+              onClick={() => setViewTab('register')}
+            >
+              📋 Document Register ({items.length})
+            </button>
+          </>
+        )}
+      </div>
 
       {/* VIEW: Timeline Comparison Matrix (Photos Only) */}
       {photo && viewTab === 'matrix' && (
@@ -482,8 +515,25 @@ export function FilesWorkspace({ kind }: { kind: 'photos' | 'documents' }) {
         />
       )}
 
+      {/* VIEW: Patient Document Dossier (Documents Only) */}
+      {!photo && viewTab === 'dossier' && (
+        <DocumentDossier
+          documents={items as unknown as DocumentRecord[]}
+          patients={patients}
+          selectedPatientId={patientId}
+          onSelectPatient={(id) => setPatientId(id)}
+          token={tokenRef.current}
+          onPreview={(doc) => setPreviewTarget(doc)}
+          onEdit={(doc) => setEditTarget(doc)}
+          onDelete={(doc) => setDeleteTarget({ id: doc.DocumentID, label: doc.FileName })}
+          onUploadForCategory={() => {
+            setViewTab('upload');
+          }}
+        />
+      )}
+
       {/* VIEW: Upload Section */}
-      {(!photo || viewTab === 'upload') && (
+      {viewTab === 'upload' && (
         <section className="panel">
           <h3>{photo ? '📸 Upload patient photos (6 Angles)' : '📄 Upload patient documents'}</h3>
           <p className="subtle" style={{ marginTop: '-8px', marginBottom: '16px' }}>
