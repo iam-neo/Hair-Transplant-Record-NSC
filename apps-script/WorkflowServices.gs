@@ -149,10 +149,36 @@ function photoAction_(u,a,p){
     requirePermission_(u,'photos.upload');
     if(!p.patientId||!p.base64||!p.mimeType) throw clientError_('Patient, image content, and MIME type are required.');
     if(!/^image\/(jpeg|png|webp)$/.test(p.mimeType)) throw clientError_('Only JPEG, PNG, and WebP images are allowed.');
-    var id=nextId_('PHOTO'),folder=patientFolder_(p.patientId),type=p.sessionType||'Other',target=findOrCreateFolder_(folder,type),date=Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM-dd'),file=savePrivateFile_(target,p.base64,p.mimeType,p.patientId+'_'+date+'_'+sanitizeFileName_(type)+'_'+sanitizeFileName_(p.category||'Other')+'.'+(p.extension||'jpg'));
-    append_('Photos',{PhotoID:id,PhotoSessionID:p.photoSessionId||'',PatientID:p.patientId,Category:p.category||'Other',FileName:file.getName(),DriveFileID:file.getId(),MimeType:p.mimeType,Size:file.getSize(),Notes:p.notes||'',CreatedAt:new Date()});
+    var id=nextId_('PHOTO'),folder=patientFolder_(p.patientId),type=p.sessionType||'Before Transplant',target=findOrCreateFolder_(folder,type),date=p.photoDate||Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM-dd'),file=savePrivateFile_(target,p.base64,p.mimeType,p.patientId+'_'+date+'_'+sanitizeFileName_(type)+'_'+sanitizeFileName_(p.category||'Other')+'.'+(p.extension||'jpg'));
+    append_('Photos',{PhotoID:id,PhotoSessionID:p.photoSessionId||'',PatientID:p.patientId,SessionType:type,Category:p.category||'Other',PhotoDate:date,FileName:file.getName(),DriveFileID:file.getId(),MimeType:p.mimeType,Size:file.getSize(),Notes:p.notes||'',CreatedAt:new Date()});
     audit_(u,p.patientId,'UPLOAD','Photo',id,'Private patient photograph uploaded');
     return ok_({id:id});
+  }
+  if(a==='photos.update'){
+    requirePermission_(u,'photos.edit');
+    var phId=p.photoId||p.id;
+    if(!phId) throw clientError_('Photo ID is required.');
+    var updates={};
+    if(p.category!==undefined) updates.Category=p.category;
+    if(p.sessionType!==undefined) updates.SessionType=p.sessionType;
+    if(p.photoDate!==undefined) updates.PhotoDate=p.photoDate;
+    if(p.notes!==undefined) updates.Notes=p.notes;
+    updateRow_('Photos','PhotoID',phId,updates);
+    var phRec=find_('Photos','PhotoID',phId);
+    audit_(u,phRec?phRec.PatientID:'','UPDATE','Photo',phId,'Photo metadata updated');
+    return ok_({id:phId,item:phRec});
+  }
+  if(a==='photos.get'){
+    requirePermission_(u,'photos.view');
+    var phId=p.photoId||p.id;
+    var phRec=find_('Photos','PhotoID',phId);
+    if(!phRec||!phRec.DriveFileID) throw clientError_('Photo not found.','NOT_FOUND');
+    try {
+      var file=DriveApp.getFileById(phRec.DriveFileID),blob=file.getBlob();
+      return ok_({id:phId,base64:Utilities.base64Encode(blob.getBytes()),mimeType:blob.getContentType(),fileName:file.getName(),url:file.getUrl()});
+    } catch(err) {
+      return ok_({id:phId,url:'https://drive.google.com/file/d/'+phRec.DriveFileID+'/view'});
+    }
   }
   if(a==='photos.delete'){
     requirePermission_(u,'photos.delete');
@@ -167,7 +193,20 @@ function photoAction_(u,a,p){
     return ok_({id:phId});
   }
   requirePermission_(u,'photos.view');
-  return ok_({sessions:rows_('PhotoSessions').filter(function(x){return !p.patientId||x.PatientID===p.patientId;}),items:rows_('Photos').filter(function(x){return !p.patientId||x.PatientID===p.patientId;})});
+  var photoRows=rows_('Photos').filter(function(x){return !p.patientId||x.PatientID===p.patientId;}).map(function(x){
+    if(!x.SessionType){
+      var fn=String(x.FileName||'');
+      ['Before Transplant','Day of Transplant','After Transplant','Follow-up','Review','Routine Visit'].forEach(function(st){
+        if(fn.indexOf(sanitizeFileName_(st))>=0) x.SessionType=st;
+      });
+      if(!x.SessionType) x.SessionType='Before Transplant';
+    }
+    if(!x.PhotoDate){
+      x.PhotoDate=x.CreatedAt?String(x.CreatedAt).slice(0,10):'';
+    }
+    return x;
+  });
+  return ok_({sessions:rows_('PhotoSessions').filter(function(x){return !p.patientId||x.PatientID===p.patientId;}),items:photoRows});
 }
 
 function documentAction_(u,a,p){
@@ -178,6 +217,30 @@ function documentAction_(u,a,p){
     append_('Documents',{DocumentID:id,PatientID:p.patientId,DocumentType:p.documentType||'Other',FileName:file.getName(),DriveFileID:file.getId(),MimeType:p.mimeType,Size:file.getSize(),Notes:p.notes||'',CreatedBy:u.UserID,CreatedAt:new Date()});
     audit_(u,p.patientId,'UPLOAD','Document',id,'Private document uploaded');
     return ok_({id:id});
+  }
+  if(a==='documents.update'){
+    requirePermission_(u,'documents.edit');
+    var docId=p.documentId||p.id;
+    if(!docId) throw clientError_('Document ID is required.');
+    var updates={};
+    if(p.documentType!==undefined) updates.DocumentType=p.documentType;
+    if(p.notes!==undefined) updates.Notes=p.notes;
+    updateRow_('Documents','DocumentID',docId,updates);
+    var docRec=find_('Documents','DocumentID',docId);
+    audit_(u,docRec?docRec.PatientID:'','UPDATE','Document',docId,'Document metadata updated');
+    return ok_({id:docId,item:docRec});
+  }
+  if(a==='documents.get'){
+    requirePermission_(u,'documents.view');
+    var docId=p.documentId||p.id;
+    var docRec=find_('Documents','DocumentID',docId);
+    if(!docRec||!docRec.DriveFileID) throw clientError_('Document not found.','NOT_FOUND');
+    try {
+      var file=DriveApp.getFileById(docRec.DriveFileID),blob=file.getBlob();
+      return ok_({id:docId,base64:Utilities.base64Encode(blob.getBytes()),mimeType:blob.getContentType(),fileName:file.getName(),url:file.getUrl()});
+    } catch(err) {
+      return ok_({id:docId,url:'https://drive.google.com/file/d/'+docRec.DriveFileID+'/view'});
+    }
   }
   if(a==='documents.delete'){
     requirePermission_(u,'documents.delete');
