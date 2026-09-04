@@ -20,6 +20,54 @@ function asBase64(file: File) {
   });
 }
 
+/**
+ * Optimizes image files before uploading to Google Apps Script.
+ * Apps Script has tight execution timeouts and payload size limits (~10-25MB proxy cap).
+ * Smartphone photos are often 8-15MB raw. Downscaling to 2048px (high-res clinical standard)
+ * reduces the payload to ~300KB-800KB without any noticeable loss of follicle detail.
+ */
+function prepareUploadFile(file: File): Promise<{ base64: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/') || file.type === 'image/svg+xml' || file.type === 'image/gif') {
+      asBase64(file).then(base64 => resolve({ base64, mimeType: file.type || 'application/octet-stream' })).catch(reject);
+      return;
+    }
+
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const MAX_DIM = 2048;
+      let { width, height } = img;
+      if (width > MAX_DIM || height > MAX_DIM) {
+        const scale = Math.min(MAX_DIM / width, MAX_DIM / height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        asBase64(file).then(base64 => resolve({ base64, mimeType: file.type })).catch(reject);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      const outMime = file.type === 'image/png' && file.size < 1_500_000 ? 'image/png' : 'image/jpeg';
+      const dataUrl = canvas.toDataURL(outMime, 0.88);
+      resolve({
+        base64: dataUrl.split(',')[1],
+        mimeType: outMime,
+      });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      asBase64(file).then(base64 => resolve({ base64, mimeType: file.type })).catch(reject);
+    };
+    img.src = objectUrl;
+  });
+}
+
 function previewUrl(file: File): string {
   return URL.createObjectURL(file);
 }
@@ -210,18 +258,26 @@ export function FilesWorkspace({ kind }: { kind: 'photos' | 'documents' }) {
   const [deleteBusy, setDeleteBusy] = useState(false);
 
   const s = sessionStore.get();
+  // Stabilise the token so useCallback / useEffect don't loop.
+  // sessionStore.get() returns a *new* object every render → the old `s`
+  // dependency kept re-creating `load` → re-triggering useEffect → infinite API calls.
+  const tokenRef = useRef(s?.token ?? '');
+  tokenRef.current = s?.token ?? '';
 
   const load = useCallback(() => {
-    if (s) {
-      api<{ items: Record<string, string>[]; sessions?: Record<string, string>[] }>(photo ? 'photos.list' : 'documents.list', {}, s.token)
-        .then(r => { setItems(r.items); setSessions(r.sessions || []); })
-        .catch(e => setError(e.message));
+    const token = tokenRef.current;
+    if (!token) return;
 
-      api<{ items: Patient[] }>('patients.list', { limit: 200 }, s.token)
-        .then(res => setPatients(res.items || []))
-        .catch(() => {});
-    }
-  }, [s, photo]);
+    setError('');                       // <-- clear stale errors
+
+    api<{ items: Record<string, string>[]; sessions?: Record<string, string>[] }>(photo ? 'photos.list' : 'documents.list', {}, token)
+      .then(r => { setItems(r.items); setSessions(r.sessions || []); })
+      .catch(e => setError(e.message));
+
+    api<{ items: Patient[] }>('patients.list', { limit: 200 }, token)
+      .then(res => setPatients(res.items || []))
+      .catch(() => {});
+  }, [photo]);                          // <-- only depends on `photo`, not `s`
 
   useEffect(() => {
     load();
@@ -293,7 +349,8 @@ export function FilesWorkspace({ kind }: { kind: 'photos' | 'documents' }) {
       return;
     }
 
-    if (!s) {
+    const token = tokenRef.current;
+    if (!token) {
       setError('Session expired. Please log in again.');
       return;
     }
@@ -311,28 +368,28 @@ export function FilesWorkspace({ kind }: { kind: 'photos' | 'documents' }) {
       setUploadProgress(prev => ({ ...prev, current: prev.current + 1 }));
 
       try {
-        const base64 = await asBase64(slotFile.file);
+        const prepared = await prepareUploadFile(slotFile.file);
         if (photo) {
           await api('photos.upload', {
             patientId,
-            base64,
-            mimeType: slotFile.file.type,
+            base64: prepared.base64,
+            mimeType: prepared.mimeType,
             fileName: slotFile.file.name,
-            extension: slotFile.file.name.split('.').pop(),
+            extension: prepared.mimeType === 'image/png' ? 'png' : 'jpg',
             sessionType,
             photoDate,
             category: key,
             notes,
-          }, s.token);
+          }, token);
         } else {
           await api('documents.upload', {
             patientId,
-            base64,
-            mimeType: slotFile.file.type,
+            base64: prepared.base64,
+            mimeType: prepared.mimeType,
             fileName: slotFile.file.name,
             documentType: key,
             notes,
-          }, s.token);
+          }, token);
         }
         setSlotStatus(prev => ({ ...prev, [key]: 'uploaded' }));
         successCount++;
@@ -355,10 +412,11 @@ export function FilesWorkspace({ kind }: { kind: 'photos' | 'documents' }) {
   }
 
   async function doDelete() {
-    if (!deleteTarget || !s) return;
+    const token = tokenRef.current;
+    if (!deleteTarget || !token) return;
     setDeleteBusy(true);
     try {
-      await api(photo ? 'photos.delete' : 'documents.delete', photo ? { photoId: deleteTarget.id } : { documentId: deleteTarget.id }, s.token);
+      await api(photo ? 'photos.delete' : 'documents.delete', photo ? { photoId: deleteTarget.id } : { documentId: deleteTarget.id }, token);
       setDeleteTarget(null); load();
     } catch (e) { setError(e instanceof Error ? e.message : 'Delete failed.'); setDeleteTarget(null); }
     finally { setDeleteBusy(false); }
@@ -414,7 +472,7 @@ export function FilesWorkspace({ kind }: { kind: 'photos' | 'documents' }) {
           patients={patients}
           selectedPatientId={patientId}
           onSelectPatient={(id) => setPatientId(id)}
-          token={s?.token}
+          token={tokenRef.current}
           onPreview={(ph) => setPreviewTarget(ph)}
           onEdit={(ph) => setEditTarget(ph)}
           onUploadForSlot={(stage) => {

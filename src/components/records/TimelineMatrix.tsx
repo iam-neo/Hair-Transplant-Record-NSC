@@ -1,7 +1,148 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { PatientSelect } from "@/components/ui/PatientSelect";
+import { api } from "@/lib/api/client";
 import type { PhotoRecord, Patient } from "@/types";
+
+/* ─── Cache for base64 photo data so slots never re-fetch on tab switches ─── */
+const photoDataCache = new Map<string, string>();
+
+interface DrivePhotoThumbnailProps {
+  photo: PhotoRecord;
+  token?: string;
+  alt?: string;
+  size?: number;
+  objectFit?: "cover" | "contain";
+  className?: string;
+  style?: React.CSSProperties;
+}
+
+export function DrivePhotoThumbnail({
+  photo,
+  token,
+  alt = "Photo",
+  size = 400,
+  objectFit = "cover",
+  className,
+  style,
+}: DrivePhotoThumbnailProps) {
+  const cached = photoDataCache.get(photo.PhotoID);
+  const directCdnUrl = photo.DriveFileID ? `https://lh3.googleusercontent.com/d/${photo.DriveFileID}=w${size}` : "";
+
+  const [src, setSrc] = useState(cached || directCdnUrl);
+  const [loading, setLoading] = useState(!cached);
+  const [failed, setFailed] = useState(false);
+  const [hasTriedApi, setHasTriedApi] = useState(false);
+
+  useEffect(() => {
+    if (cached) {
+      setSrc(cached);
+      setLoading(false);
+      setFailed(false);
+    } else if (photo.DriveFileID) {
+      setSrc(`https://lh3.googleusercontent.com/d/${photo.DriveFileID}=w${size}`);
+      setLoading(true);
+      setFailed(false);
+      setHasTriedApi(false);
+    }
+  }, [photo.PhotoID, photo.DriveFileID, size, cached]);
+
+  async function handleImageError() {
+    // If Google Drive file has private sharing or third-party cookies are blocked,
+    // Google returns a 302 redirect to the login page which fails inside <img>.
+    // We immediately fetch the actual photo bytes via the authenticated API and show it!
+    if (!hasTriedApi && token && photo.PhotoID) {
+      setHasTriedApi(true);
+      try {
+        const res = await api<{ base64?: string; mimeType?: string }>(
+          "photos.get",
+          { photoId: photo.PhotoID },
+          token
+        );
+        if (res.base64) {
+          const dataUrl = `data:${res.mimeType || "image/jpeg"};base64,${res.base64}`;
+          photoDataCache.set(photo.PhotoID, dataUrl);
+          setSrc(dataUrl);
+          setLoading(false);
+          setFailed(false);
+          return;
+        }
+      } catch (err) {
+        console.warn("API base64 fallback for photo failed:", photo.PhotoID, err);
+      }
+    }
+
+    // Secondary fallback: standard drive thumbnail endpoint
+    if (!src.includes("drive.google.com/thumbnail") && photo.DriveFileID) {
+      setSrc(`https://drive.google.com/thumbnail?id=${photo.DriveFileID}&sz=w${size}`);
+      return;
+    }
+
+    setFailed(true);
+    setLoading(false);
+  }
+
+  if (failed || !photo.DriveFileID) {
+    return (
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "var(--surface-sunken, #f8fafc)",
+          color: "var(--muted, #64748b)",
+          padding: "8px",
+          textAlign: "center",
+          fontSize: "11px",
+          ...style,
+        }}
+      >
+        <span style={{ fontSize: "24px", marginBottom: "4px" }}>📸</span>
+        <span style={{ fontWeight: 600 }}>{photo.Category || "Photo"}</span>
+        <span style={{ fontSize: "10px", opacity: 0.8 }}>Click to preview</span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", ...style }}>
+      {loading && !cached && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "#f1f5f9",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1,
+          }}
+        >
+          <span style={{ fontSize: "11px", color: "var(--muted)" }}>Loading…</span>
+        </div>
+      )}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt={alt}
+        className={className}
+        onLoad={() => setLoading(false)}
+        onError={handleImageError}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit,
+          display: "block",
+          opacity: loading && !cached ? 0 : 1,
+          transition: "opacity 0.2s ease-in",
+        }}
+      />
+    </div>
+  );
+}
 
 const STANDARD_ANGLES = [
   { key: "Front", label: "Front", icon: "🧑" },
@@ -38,6 +179,7 @@ export function TimelineMatrix({
   patients,
   selectedPatientId,
   onSelectPatient,
+  token,
   onPreview,
   onEdit,
   onUploadForSlot,
@@ -390,7 +532,8 @@ export function TimelineMatrix({
                                     aspectRatio: "1",
                                     borderRadius: "8px",
                                     overflow: "hidden",
-                                    background: "#0f172a",
+                                    background: "var(--surface-sunken, #f8fafc)",
+                                    border: "1px solid var(--border)",
                                     boxShadow: isComparing
                                       ? "0 0 0 3px var(--primary)"
                                       : "0 2px 6px rgba(0,0,0,0.08)",
@@ -399,20 +542,12 @@ export function TimelineMatrix({
                                   onClick={() => onPreview(ph)}
                                   title={`${angle.label} • Clicked: ${ph.PhotoDate || "N/A"}`}
                                 >
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={
-                                      ph.DriveFileID
-                                        ? `https://drive.google.com/thumbnail?id=${ph.DriveFileID}&sz=w400`
-                                        : ""
-                                    }
+                                  <DrivePhotoThumbnail
+                                    photo={ph}
+                                    token={token}
                                     alt={angle.label}
-                                    style={{
-                                      width: "100%",
-                                      height: "100%",
-                                      objectFit: "cover",
-                                      display: "block",
-                                    }}
+                                    size={400}
+                                    objectFit="cover"
                                   />
 
                                   {/* Overlay Date Badge */}
@@ -572,22 +707,15 @@ export function TimelineMatrix({
               }}
             >
               {/* Photo 2 (Right / After) */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={
-                  compareItems[1].DriveFileID
-                    ? `https://drive.google.com/thumbnail?id=${compareItems[1].DriveFileID}&sz=w1600`
-                    : ""
-                }
-                alt="After"
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "contain",
-                }}
-              />
+              <div style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
+                <DrivePhotoThumbnail
+                  photo={compareItems[1]}
+                  token={token}
+                  alt="After"
+                  size={1600}
+                  objectFit="contain"
+                />
+              </div>
 
               {/* Photo 1 (Left / Before) with clip-path */}
               <div
@@ -600,21 +728,12 @@ export function TimelineMatrix({
                   overflow: "hidden",
                 }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={
-                    compareItems[0].DriveFileID
-                      ? `https://drive.google.com/thumbnail?id=${compareItems[0].DriveFileID}&sz=w1600`
-                      : ""
-                  }
+                <DrivePhotoThumbnail
+                  photo={compareItems[0]}
+                  token={token}
                   alt="Before"
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "contain",
-                  }}
+                  size={1600}
+                  objectFit="contain"
                 />
               </div>
 

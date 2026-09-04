@@ -192,6 +192,22 @@ function photoAction_(u,a,p){
     audit_(u,phRec?phRec.PatientID:'','DELETE','Photo',phId,'Photo deleted');
     return ok_({id:phId});
   }
+  if(a==='photos.fixSharing'){
+    requirePermission_(u,'photos.view');
+    var allPhotos=rows_('Photos'), fixed=0;
+    allPhotos.forEach(function(r){
+      if(r.DriveFileID){
+        try {
+          var f=DriveApp.getFileById(r.DriveFileID);
+          if(f.getSharingAccess()!==DriveApp.Access.ANYONE_WITH_LINK){
+            f.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW);
+            fixed++;
+          }
+        } catch(e){}
+      }
+    });
+    return ok_({fixed:fixed,total:allPhotos.length});
+  }
   requirePermission_(u,'photos.view');
   var photoRows=rows_('Photos').filter(function(x){return !p.patientId||x.PatientID===p.patientId;}).map(function(x){
     if(!x.SessionType){
@@ -203,6 +219,14 @@ function photoAction_(u,a,p){
     }
     if(!x.PhotoDate){
       x.PhotoDate=x.CreatedAt?String(x.CreatedAt).slice(0,10):'';
+    }
+    if(x.DriveFileID){
+      try {
+        var f=DriveApp.getFileById(x.DriveFileID);
+        if(f.getSharingAccess()!==DriveApp.Access.ANYONE_WITH_LINK){
+          f.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW);
+        }
+      } catch(e){}
     }
     return x;
   });
