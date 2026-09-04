@@ -10,16 +10,21 @@ function followUpAction_(u,a,p){
     var recipients = [];
     if(Array.isArray(p.recipients)){
       p.recipients.forEach(function(r){
-        if(r && typeof r === 'string'){
-          var clean = r.trim().toLowerCase();
-          if(/^\S+@\S+\.\S+$/.test(clean) && recipients.indexOf(clean) === -1){
-            recipients.push(clean);
+        if(typeof r === 'object' && r !== null && r.email){
+          var clean = String(r.email).trim().toLowerCase();
+          if(/^\S+@\S+\.\S+$/.test(clean)){
+            recipients.push({ email: clean, name: r.name || '', type: r.type || 'staff' });
+          }
+        } else if(typeof r === 'string'){
+          var cleanStr = r.trim().toLowerCase();
+          if(/^\S+@\S+\.\S+$/.test(cleanStr)){
+            recipients.push({ email: cleanStr, name: '', type: 'auto' });
           }
         }
       });
     }
 
-    // Send immediate branded confirmation email
+    // Send immediate confirmation email (patient gets Patient Template, staff gets Staff Template)
     var sendNow = p.sendEmailNow !== false && p.sendEmailNow !== 'false';
     if(sendNow && recipients.length > 0){
       sendFollowUpNotification_(recipients, patient, followUpRecord, false);
@@ -30,8 +35,17 @@ function followUpAction_(u,a,p){
     if(scheduleReminder && recipients.length > 0){
       var reminderDate = new Date(p.followUpDate + 'T09:00:00');
       if(isNaN(reminderDate.getTime())) reminderDate = now;
-      recipients.forEach(function(recipient){
-        append_('Reminders',{ReminderID:nextId_('REM'),FollowUpID:id,Recipient:recipient,RecipientType:'Configured',ScheduledAt:reminderDate,Status:'Scheduled',CreatedAt:now,UpdatedAt:now});
+      recipients.forEach(function(rObj){
+        append_('Reminders',{
+          ReminderID:nextId_('REM'),
+          FollowUpID:id,
+          Recipient:rObj.email,
+          RecipientType:rObj.type === 'patient' ? 'Patient' : 'Staff',
+          ScheduledAt:reminderDate,
+          Status:'Scheduled',
+          CreatedAt:now,
+          UpdatedAt:now
+        });
       });
     }
 

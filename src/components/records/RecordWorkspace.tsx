@@ -124,27 +124,50 @@ export function RecordWorkspace({ module }: { module: string }) {
 
     // Attach email recipients for followups
     if (module === 'followups') {
-      const recipientSet = new Set<string>();
+      const recipientList: { email: string; name: string; type: 'patient' | 'staff' }[] = [];
+      const seenEmails = new Set<string>();
 
       // 1. Patient email
       if (notifyPatient) {
         const patientEmail = (patientEmailOverride.trim() || patientMap[form.patientId]?.email || '').toLowerCase();
-        if (patientEmail && /^\S+@\S+\.\S+$/.test(patientEmail)) {
-          recipientSet.add(patientEmail);
+        if (patientEmail && /^\S+@\S+\.\S+$/.test(patientEmail) && !seenEmails.has(patientEmail)) {
+          seenEmails.add(patientEmail);
+          recipientList.push({
+            email: patientEmail,
+            name: patientMap[form.patientId]?.fullName || 'Patient',
+            type: 'patient',
+          });
         }
       }
 
       // 2. Selected clinic doctors & staff
       selectedStaffEmails.forEach(em => {
-        if (em && /^\S+@\S+\.\S+$/.test(em)) recipientSet.add(em.toLowerCase());
+        const clean = em.trim().toLowerCase();
+        if (clean && /^\S+@\S+\.\S+$/.test(clean) && !seenEmails.has(clean)) {
+          seenEmails.add(clean);
+          const staff = staffList.find(s => s.email.toLowerCase() === clean);
+          recipientList.push({
+            email: clean,
+            name: staff?.fullName || 'Staff Member',
+            type: 'staff',
+          });
+        }
       });
 
       // 3. Custom additional emails
       customEmails.forEach(em => {
-        if (em && /^\S+@\S+\.\S+$/.test(em)) recipientSet.add(em.toLowerCase());
+        const clean = em.trim().toLowerCase();
+        if (clean && /^\S+@\S+\.\S+$/.test(clean) && !seenEmails.has(clean)) {
+          seenEmails.add(clean);
+          recipientList.push({
+            email: clean,
+            name: 'Clinic Team',
+            type: 'staff',
+          });
+        }
       });
 
-      payload.recipients = Array.from(recipientSet);
+      payload.recipients = recipientList;
       payload.sendEmailNow = sendEmailNow;
       payload.scheduleReminder = scheduleReminder;
     }
