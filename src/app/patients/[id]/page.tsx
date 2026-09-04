@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, type FormEvent } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
 import { api } from "@/lib/api/client";
 import { sessionStore, can } from "@/lib/auth/session";
@@ -84,6 +85,41 @@ export default function PatientProfile() {
         </div>
       </div>
       {error && <div className="form-error">{error}</div>}
+
+      {/* Quick Record Actions Toolbar */}
+      <section className="panel" style={{ marginTop: 0, marginBottom: '20px', background: '#f8fafc', border: '1px solid var(--border)', padding: '14px 18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '14px', color: 'var(--navy)' }}>⚡ Quick Record Actions</h3>
+            <p className="subtle" style={{ margin: '2px 0 0', fontSize: '12px' }}>
+              Add records or files directly for {data?.patient.FullName || id}:
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <Link href={`/consultations?patientId=${id}`} className="button secondary" style={{ fontSize: '12px', padding: '6px 12px' }}>
+              + Consultation
+            </Link>
+            <Link href={`/assessments?patientId=${id}`} className="button secondary" style={{ fontSize: '12px', padding: '6px 12px' }}>
+              + Assessment
+            </Link>
+            <Link href={`/procedures?patientId=${id}`} className="button secondary" style={{ fontSize: '12px', padding: '6px 12px' }}>
+              + Procedure
+            </Link>
+            <Link href={`/followups?patientId=${id}`} className="button secondary" style={{ fontSize: '12px', padding: '6px 12px' }}>
+              + Follow-up
+            </Link>
+            <Link href={`/payments?patientId=${id}`} className="button secondary" style={{ fontSize: '12px', padding: '6px 12px' }}>
+              + Payment
+            </Link>
+            <Link href={`/photos?patientId=${id}`} className="button secondary" style={{ fontSize: '12px', padding: '6px 12px' }}>
+              📸 Photo
+            </Link>
+            <Link href={`/documents?patientId=${id}`} className="button secondary" style={{ fontSize: '12px', padding: '6px 12px' }}>
+              📄 Document
+            </Link>
+          </div>
+        </div>
+      </section>
 
       {/* Patient Details Panel */}
       {data && (

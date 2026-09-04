@@ -1,28 +1,50 @@
 "use client";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState, useMemo } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { api } from "@/lib/api/client";
 import { sessionStore } from "@/lib/auth/session";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
+import { PatientSelect } from "@/components/ui/PatientSelect";
+import type { Patient } from "@/types";
 
 type Field = { name: string; label: string; type?: string; options?: string[] };
 type Config = { title: string; action: string; fields: Field[]; columns: string[]; idColumn: string };
 
+interface StaffUser {
+  id: string;
+  fullName: string;
+  email: string;
+  role: string;
+  status: string;
+}
+
 const configs: Record<string, Config> = {
-  consultations: { title: 'Consultations', action: 'consultations', idColumn: 'ConsultationID', fields: [{ name: 'patientId', label: 'Patient ID' }, { name: 'consultationDate', label: 'Consultation date', type: 'date' }, { name: 'doctor', label: 'Doctor' }, { name: 'mainConcern', label: 'Main concern' }, { name: 'consultationNotes', label: 'Clinical notes', type: 'textarea' }, { name: 'recommendation', label: 'Recommendation', type: 'textarea' }], columns: ['ConsultationID', 'PatientID', 'ConsultationDate', 'Doctor', 'MainConcern'] },
-  assessments: { title: 'Assessments', action: 'assessments', idColumn: 'AssessmentID', fields: [{ name: 'patientId', label: 'Patient ID' }, { name: 'assessmentDate', label: 'Assessment date', type: 'date' }, { name: 'doctor', label: 'Doctor' }, { name: 'hairLossPattern', label: 'Hair-loss pattern' }, { name: 'norwoodClassification', label: 'Norwood classification' }, { name: 'frontalGrafts', label: 'Frontal estimated grafts', type: 'number' }, { name: 'midScalpGrafts', label: 'Mid-scalp estimated grafts', type: 'number' }, { name: 'crownGrafts', label: 'Crown estimated grafts', type: 'number' }, { name: 'clinicalNotes', label: 'Clinical notes', type: 'textarea' }], columns: ['AssessmentID', 'PatientID', 'AssessmentDate', 'Doctor', 'NorwoodClassification', 'EstimatedGrafts'] },
-  procedures: { title: 'Procedures', action: 'procedures', idColumn: 'ProcedureID', fields: [{ name: 'patientId', label: 'Patient ID' }, { name: 'procedureDate', label: 'Procedure date', type: 'date' }, { name: 'doctor', label: 'Doctor' }, { name: 'procedureType', label: 'Procedure type' }, { name: 'plannedGrafts', label: 'Planned grafts', type: 'number' }, { name: 'harvestedGrafts', label: 'Harvested grafts', type: 'number' }, { name: 'implantedGrafts', label: 'Implanted grafts', type: 'number' }, { name: 'procedureStatus', label: 'Status', options: ['Planned', 'Scheduled', 'In Progress', 'Completed', 'Cancelled', 'Rescheduled'] }, { name: 'procedureNotes', label: 'Procedure notes', type: 'textarea' }], columns: ['ProcedureID', 'PatientID', 'ProcedureDate', 'Doctor', 'ProcedureStatus', 'ImplantedGrafts'] },
-  followups: { title: 'Follow-ups', action: 'followups', idColumn: 'FollowUpID', fields: [{ name: 'patientId', label: 'Patient ID' }, { name: 'followUpDate', label: 'Follow-up date', type: 'date' }, { name: 'followUpType', label: 'Type', options: ['Day 1', 'Week 1', 'Month 1', 'Month 3', 'Month 6', 'Year 1', 'Other'] }, { name: 'assignedTo', label: 'Assigned to' }, { name: 'notes', label: 'Notes', type: 'textarea' }], columns: ['FollowUpID', 'PatientID', 'FollowUpDate', 'FollowUpType', 'Status', 'AssignedTo'] },
-  payments: { title: 'Payments', action: 'payments', idColumn: 'PaymentID', fields: [{ name: 'patientId', label: 'Patient ID' }, { name: 'paymentDate', label: 'Payment date', type: 'date' }, { name: 'amount', label: 'Amount (NPR)', type: 'number' }, { name: 'method', label: 'Method', options: ['Cash', 'Card', 'Bank transfer', 'Mobile payment', 'Other'] }, { name: 'reference', label: 'Reference' }, { name: 'notes', label: 'Notes', type: 'textarea' }], columns: ['PaymentID', 'PatientID', 'PaymentDate', 'Amount', 'Method', 'Reference'] }
+  consultations: { title: 'Consultations', action: 'consultations', idColumn: 'ConsultationID', fields: [{ name: 'patientId', label: 'Patient' }, { name: 'consultationDate', label: 'Consultation date', type: 'date' }, { name: 'doctor', label: 'Doctor' }, { name: 'mainConcern', label: 'Main concern' }, { name: 'consultationNotes', label: 'Clinical notes', type: 'textarea' }, { name: 'recommendation', label: 'Recommendation', type: 'textarea' }], columns: ['ConsultationID', 'PatientID', 'ConsultationDate', 'Doctor', 'MainConcern'] },
+  assessments: { title: 'Assessments', action: 'assessments', idColumn: 'AssessmentID', fields: [{ name: 'patientId', label: 'Patient' }, { name: 'assessmentDate', label: 'Assessment date', type: 'date' }, { name: 'doctor', label: 'Doctor' }, { name: 'hairLossPattern', label: 'Hair-loss pattern' }, { name: 'norwoodClassification', label: 'Norwood classification' }, { name: 'frontalGrafts', label: 'Frontal estimated grafts', type: 'number' }, { name: 'midScalpGrafts', label: 'Mid-scalp estimated grafts', type: 'number' }, { name: 'crownGrafts', label: 'Crown estimated grafts', type: 'number' }, { name: 'clinicalNotes', label: 'Clinical notes', type: 'textarea' }], columns: ['AssessmentID', 'PatientID', 'AssessmentDate', 'Doctor', 'NorwoodClassification', 'EstimatedGrafts'] },
+  procedures: { title: 'Procedures', action: 'procedures', idColumn: 'ProcedureID', fields: [{ name: 'patientId', label: 'Patient' }, { name: 'procedureDate', label: 'Procedure date', type: 'date' }, { name: 'doctor', label: 'Doctor' }, { name: 'procedureType', label: 'Procedure type' }, { name: 'plannedGrafts', label: 'Planned grafts', type: 'number' }, { name: 'harvestedGrafts', label: 'Harvested grafts', type: 'number' }, { name: 'implantedGrafts', label: 'Implanted grafts', type: 'number' }, { name: 'procedureStatus', label: 'Status', options: ['Planned', 'Scheduled', 'In Progress', 'Completed', 'Cancelled', 'Rescheduled'] }, { name: 'procedureNotes', label: 'Procedure notes', type: 'textarea' }], columns: ['ProcedureID', 'PatientID', 'ProcedureDate', 'Doctor', 'ProcedureStatus', 'ImplantedGrafts'] },
+  followups: { title: 'Follow-ups', action: 'followups', idColumn: 'FollowUpID', fields: [{ name: 'patientId', label: 'Patient' }, { name: 'followUpDate', label: 'Follow-up date', type: 'date' }, { name: 'followUpTime', label: 'Follow-up time (optional)', type: 'time' }, { name: 'followUpType', label: 'Type', options: ['Day 1', 'Week 1', 'Month 1', 'Month 3', 'Month 6', 'Year 1', 'Other'] }, { name: 'assignedTo', label: 'Assigned to' }, { name: 'notes', label: 'Notes', type: 'textarea' }], columns: ['FollowUpID', 'PatientID', 'FollowUpDate', 'FollowUpType', 'Status', 'AssignedTo'] },
+  payments: { title: 'Payments', action: 'payments', idColumn: 'PaymentID', fields: [{ name: 'patientId', label: 'Patient' }, { name: 'paymentDate', label: 'Payment date', type: 'date' }, { name: 'amount', label: 'Amount (NPR)', type: 'number' }, { name: 'method', label: 'Method', options: ['Cash', 'Card', 'Bank transfer', 'Mobile payment', 'Other'] }, { name: 'reference', label: 'Reference' }, { name: 'notes', label: 'Notes', type: 'textarea' }], columns: ['PaymentID', 'PatientID', 'PaymentDate', 'Amount', 'Method', 'Reference'] }
 };
 
 export function RecordWorkspace({ module }: { module: string }) {
   const config = configs[module];
   const [items, setItems] = useState<Record<string, string>[]>([]);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [staffList, setStaffList] = useState<StaffUser[]>([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState('');
+
+  // Email notifications state (specifically for followups)
+  const [notifyPatient, setNotifyPatient] = useState(true);
+  const [patientEmailOverride, setPatientEmailOverride] = useState('');
+  const [selectedStaffEmails, setSelectedStaffEmails] = useState<string[]>([]);
+  const [customEmails, setCustomEmails] = useState<string[]>([]);
+  const [customEmailInput, setCustomEmailInput] = useState('');
+  const [sendEmailNow, setSendEmailNow] = useState(true);
+  const [scheduleReminder, setScheduleReminder] = useState(true);
 
   // Edit state
   const [editOpen, setEditOpen] = useState(false);
@@ -36,28 +58,118 @@ export function RecordWorkspace({ module }: { module: string }) {
   const session = sessionStore.get();
 
   const load = () => {
-    if (session && config) api<{ items: Record<string, string>[] }>(config.action + '.list', {}, session.token).then(x => setItems(x.items)).catch(e => setError(e.message));
+    if (session && config) {
+      api<{ items: Record<string, string>[] }>(config.action + '.list', {}, session.token)
+        .then(x => setItems(x.items))
+        .catch(e => setError(e.message));
+      
+      api<{ items: Patient[] }>('patients.list', { limit: 200 }, session.token)
+        .then(res => setPatients(res.items || []))
+        .catch(() => {});
+
+      if (module === 'followups') {
+        api<{ items: StaffUser[] }>('users.list', {}, session.token)
+          .then(res => {
+            const activeStaff = (res.items || []).filter(u => u.status === 'Active' && u.email);
+            setStaffList(activeStaff);
+          })
+          .catch(() => {});
+      }
+    }
   };
 
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+    if (typeof window !== 'undefined') {
+      const pId = new URLSearchParams(window.location.search).get('patientId');
+      if (pId) {
+        setForm(prev => ({ ...prev, patientId: pId }));
+        setOpen(true);
+      }
+    }
+  }, []);
+
+  const patientMap = useMemo(() => {
+    const map: Record<string, Patient> = {};
+    patients.forEach(p => { map[p.id] = p; });
+    return map;
+  }, [patients]);
+
+  const addCustomEmail = () => {
+    const email = customEmailInput.trim().toLowerCase();
+    if (!email) return;
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+    if (!customEmails.includes(email)) {
+      setCustomEmails([...customEmails, email]);
+    }
+    setCustomEmailInput('');
+    setError('');
+  };
 
   if (!config) return null;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (!session) return;
-    setBusy(true); setError('');
+    if (!form.patientId) {
+      setError('Please select a registered patient.');
+      return;
+    }
+    setBusy(true); setError(''); setFeedback('');
+
+    const payload: Record<string, unknown> = { ...form };
+
+    // Attach email recipients for followups
+    if (module === 'followups') {
+      const recipientSet = new Set<string>();
+
+      // 1. Patient email
+      if (notifyPatient) {
+        const patientEmail = (patientEmailOverride.trim() || patientMap[form.patientId]?.email || '').toLowerCase();
+        if (patientEmail && /^\S+@\S+\.\S+$/.test(patientEmail)) {
+          recipientSet.add(patientEmail);
+        }
+      }
+
+      // 2. Selected clinic doctors & staff
+      selectedStaffEmails.forEach(em => {
+        if (em && /^\S+@\S+\.\S+$/.test(em)) recipientSet.add(em.toLowerCase());
+      });
+
+      // 3. Custom additional emails
+      customEmails.forEach(em => {
+        if (em && /^\S+@\S+\.\S+$/.test(em)) recipientSet.add(em.toLowerCase());
+      });
+
+      payload.recipients = Array.from(recipientSet);
+      payload.sendEmailNow = sendEmailNow;
+      payload.scheduleReminder = scheduleReminder;
+    }
+
     try {
-      await api(config.action + '.create', form, session.token);
-      setOpen(false); setForm({}); load();
-    } catch (e) { setError(e instanceof Error ? e.message : 'Could not save the record.'); }
-    finally { setBusy(false); }
+      const res = await api<{ id: string; recipientsCount?: number }>(config.action + '.create', payload, session.token);
+      setOpen(false);
+      setForm({});
+      setCustomEmails([]);
+      setPatientEmailOverride('');
+      setSelectedStaffEmails([]);
+      if (module === 'followups' && res?.recipientsCount !== undefined && res.recipientsCount > 0) {
+        setFeedback(`Follow-up saved! Email notification sent to ${res.recipientsCount} recipient(s).`);
+      }
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save the record.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   function startEdit(row: Record<string, string>) {
     const id = row[config.idColumn];
     setEditId(id);
-    // Map columns back to field names for editing
     const formData: Record<string, string> = {};
     config.fields.forEach(f => {
       const colName = f.name.charAt(0).toUpperCase() + f.name.slice(1);
@@ -95,9 +207,27 @@ export function RecordWorkspace({ module }: { module: string }) {
           <h2>{config.title}</h2>
           <p className="subtle">Records are stored through the authorized clinic backend.</p>
         </div>
-        <button className="button" onClick={() => setOpen(true)}>Add record</button>
+        <button
+          className="button"
+          onClick={() => {
+            setForm({});
+            setSelectedStaffEmails([]);
+            setCustomEmails([]);
+            setFeedback('');
+            setOpen(true);
+          }}
+        >
+          Add record
+        </button>
       </div>
+
+      {feedback && (
+        <div style={{ background: '#e7f7ef', color: 'var(--success)', border: '1px solid #bbf7d0', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontWeight: 600 }}>
+          ✓ {feedback}
+        </div>
+      )}
       {error && <div className="form-error">{error}</div>}
+
       <section className="panel">
         <div className="table-wrap">
           <table className="table">
@@ -110,7 +240,22 @@ export function RecordWorkspace({ module }: { module: string }) {
             <tbody>
               {items.length ? items.map((r, i) => (
                 <tr key={r[config.columns[0]] || i}>
-                  {config.columns.map(c => <td key={c}>{r[c] || '—'}</td>)}
+                  {config.columns.map(c => (
+                    <td key={c}>
+                      {c === 'PatientID' ? (
+                        <div>
+                          <strong style={{ color: 'var(--navy)' }}>{r[c]}</strong>
+                          {patientMap[r[c]] && (
+                            <div style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 500 }}>
+                              {patientMap[r[c]].fullName}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        r[c] || '—'
+                      )}
+                    </td>
+                  ))}
                   <td className="row-actions">
                     <button className="btn-icon" title="Edit" onClick={() => startEdit(r)}>✏️</button>
                     <button className="btn-icon" title="Delete" onClick={() => setDeleteTarget({ id: r[config.idColumn], label: r[config.idColumn] })}>🗑️</button>
@@ -125,18 +270,228 @@ export function RecordWorkspace({ module }: { module: string }) {
       {/* Add Record Modal */}
       {open && (
         <div className="modal-backdrop">
-          <form className="modal" onSubmit={submit}>
+          <form className="modal" onSubmit={submit} style={{ maxWidth: module === 'followups' ? '740px' : '640px' }}>
             <h2>Add {config.title.slice(0, -1)}</h2>
             <div className="grid2">
-              {config.fields.map(f => (
-                <label className="field" key={f.name}>
-                  {f.label}
-                  {f.type === 'textarea' ? <textarea rows={3} value={form[f.name] || ''} onChange={e => setForm({ ...form, [f.name]: e.target.value })} />
-                    : f.options ? <select required value={form[f.name] || ''} onChange={e => setForm({ ...form, [f.name]: e.target.value })}><option value="">Select</option>{f.options.map(o => <option key={o}>{o}</option>)}</select>
-                      : <input required={f.name === 'patientId' || f.name.includes('Date') || f.name === 'amount'} type={f.type || 'text'} value={form[f.name] || ''} onChange={e => setForm({ ...form, [f.name]: e.target.value })} />}
-                </label>
-              ))}
+              {config.fields.map(f => {
+                if (f.name === 'patientId') {
+                  return (
+                    <div key={f.name} style={{ gridColumn: '1 / -1', marginBottom: '8px' }}>
+                      <PatientSelect
+                        value={form.patientId || ''}
+                        onChange={(id, p) => {
+                          setForm(prev => ({ ...prev, patientId: id }));
+                          if (p?.email) setPatientEmailOverride('');
+                        }}
+                        required
+                        initialPatients={patients}
+                        label="Select Registered Patient"
+                        placeholder="Type patient name, phone number, or ID to select..."
+                      />
+                    </div>
+                  );
+                }
+
+                // Smart dropdown for Assigned To in followups
+                if (f.name === 'assignedTo' && module === 'followups' && staffList.length > 0) {
+                  return (
+                    <label className="field" key={f.name}>
+                      {f.label}
+                      <select
+                        value={form.assignedTo || ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setForm({ ...form, assignedTo: val });
+                          const matched = staffList.find(s => s.fullName === val);
+                          if (matched && matched.email && !selectedStaffEmails.includes(matched.email.toLowerCase())) {
+                            setSelectedStaffEmails(prev => [...prev, matched.email.toLowerCase()]);
+                          }
+                        }}
+                      >
+                        <option value="">Select Doctor or Staff</option>
+                        {staffList.map(s => (
+                          <option key={s.id} value={s.fullName}>
+                            {s.fullName} ({s.role.replace('_', ' ')})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  );
+                }
+
+                return (
+                  <label className="field" key={f.name}>
+                    {f.label}
+                    {f.type === 'textarea' ? (
+                      <textarea
+                        rows={3}
+                        value={form[f.name] || ''}
+                        onChange={e => setForm({ ...form, [f.name]: e.target.value })}
+                      />
+                    ) : f.options ? (
+                      <select
+                        required
+                        value={form[f.name] || ''}
+                        onChange={e => setForm({ ...form, [f.name]: e.target.value })}
+                      >
+                        <option value="">Select</option>
+                        {f.options.map(o => <option key={o}>{o}</option>)}
+                      </select>
+                    ) : (
+                      <input
+                        required={f.name.includes('Date') || f.name === 'amount'}
+                        type={f.type || 'text'}
+                        value={form[f.name] || ''}
+                        onChange={e => setForm({ ...form, [f.name]: e.target.value })}
+                      />
+                    )}
+                  </label>
+                );
+              })}
+
+              {/* Follow-up Email Recipients Panel */}
+              {module === 'followups' && (
+                <div style={{ gridColumn: '1 / -1', marginTop: '16px', padding: '16px', background: '#f8fafc', border: '1.5px solid #dce6ed', borderRadius: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <h3 style={{ margin: 0, fontSize: '14px', color: 'var(--navy)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span>📧</span> Email Notifications & Reminders
+                    </h3>
+                    <span style={{ fontSize: '11px', color: 'var(--muted)', background: '#e0f2fe', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>
+                      Customizable
+                    </span>
+                  </div>
+
+                  {/* Patient Email */}
+                  <div style={{ marginBottom: '14px', paddingBottom: '12px', borderBottom: '1px solid #e2e8f0' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
+                      <input
+                        type="checkbox"
+                        checked={notifyPatient}
+                        onChange={e => setNotifyPatient(e.target.checked)}
+                      />
+                      <span>Send confirmation & reminder to Patient</span>
+                    </label>
+                    {notifyPatient && (
+                      <div style={{ marginTop: '8px', marginLeft: '24px' }}>
+                        <input
+                          type="email"
+                          placeholder={patientMap[form.patientId]?.email || "Enter patient's email address"}
+                          value={patientEmailOverride}
+                          onChange={e => setPatientEmailOverride(e.target.value)}
+                          style={{ width: '100%', maxWidth: '380px', padding: '7px 10px', fontSize: '13px', border: '1px solid var(--border)', borderRadius: '6px' }}
+                        />
+                        <span style={{ display: 'block', fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>
+                          {patientMap[form.patientId]?.email
+                            ? `Registered email: ${patientMap[form.patientId]?.email}`
+                            : 'Patient has no email registered on profile. You can type one here.'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Clinic Staff & Doctors */}
+                  <div style={{ marginBottom: '14px', paddingBottom: '12px', borderBottom: '1px solid #e2e8f0' }}>
+                    <span style={{ display: 'block', fontWeight: 600, fontSize: '13px', marginBottom: '8px', color: 'var(--ink)' }}>
+                      Select Doctors & Staff to notify:
+                    </span>
+                    {staffList.length > 0 ? (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '8px' }}>
+                        {staffList.map(s => {
+                          const isChecked = selectedStaffEmails.includes(s.email.toLowerCase());
+                          return (
+                            <label
+                              key={s.id}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '8px',
+                                fontSize: '12px',
+                                cursor: 'pointer',
+                                background: isChecked ? '#edf7fb' : '#fff',
+                                padding: '6px 10px',
+                                borderRadius: '6px',
+                                border: isChecked ? '1px solid var(--primary)' : '1px solid var(--border)',
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={e => {
+                                  const email = s.email.toLowerCase();
+                                  if (e.target.checked) {
+                                    setSelectedStaffEmails(prev => [...prev, email]);
+                                  } else {
+                                    setSelectedStaffEmails(prev => prev.filter(x => x !== email));
+                                  }
+                                }}
+                                style={{ marginTop: '2px' }}
+                              />
+                              <div>
+                                <div style={{ fontWeight: 600, color: 'var(--ink)' }}>
+                                  {s.fullName} <span style={{ fontSize: '10px', color: 'var(--muted)', fontWeight: 400 }}>({s.role.replace('_', ' ')})</span>
+                                </div>
+                                <div style={{ fontSize: '11px', color: 'var(--muted)' }}>{s.email}</div>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="subtle" style={{ fontSize: '12px', margin: 0 }}>No clinic staff email addresses found.</p>
+                    )}
+                  </div>
+
+                  {/* Additional custom emails */}
+                  <div style={{ marginBottom: '14px', paddingBottom: '12px', borderBottom: '1px solid #e2e8f0' }}>
+                    <span style={{ display: 'block', fontWeight: 600, fontSize: '13px', marginBottom: '8px', color: 'var(--ink)' }}>
+                      Add Additional Email Address:
+                    </span>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input
+                        type="email"
+                        placeholder="e.g. reception@clinic.com or another doctor's email"
+                        value={customEmailInput}
+                        onChange={e => setCustomEmailInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomEmail(); } }}
+                        style={{ width: '100%', maxWidth: '380px', padding: '7px 10px', fontSize: '13px', border: '1px solid var(--border)', borderRadius: '6px' }}
+                      />
+                      <button type="button" className="button secondary" onClick={addCustomEmail} style={{ padding: '6px 12px', fontSize: '12px' }}>
+                        + Add Email
+                      </button>
+                    </div>
+                    {customEmails.length > 0 && (
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+                        {customEmails.map(em => (
+                          <span key={em} style={{ background: '#e2e8f0', color: '#1e293b', padding: '3px 8px', borderRadius: '4px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {em}
+                            <button
+                              type="button"
+                              onClick={() => setCustomEmails(customEmails.filter(x => x !== em))}
+                              style={{ border: 0, background: 'transparent', cursor: 'pointer', fontWeight: 'bold', padding: 0, color: 'var(--danger)' }}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Email delivery options */}
+                  <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 500 }}>
+                      <input type="checkbox" checked={sendEmailNow} onChange={e => setSendEmailNow(e.target.checked)} />
+                      <span>⚡ Send branded confirmation email immediately</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 500 }}>
+                      <input type="checkbox" checked={scheduleReminder} onChange={e => setScheduleReminder(e.target.checked)} />
+                      <span>⏰ Queue reminder on follow-up date</span>
+                    </label>
+                  </div>
+                </div>
+              )}
             </div>
+
             <div className="actions">
               <button type="button" className="button secondary" onClick={() => setOpen(false)}>Cancel</button>
               <button className="button" disabled={busy}>{busy ? 'Saving…' : 'Save record'}</button>

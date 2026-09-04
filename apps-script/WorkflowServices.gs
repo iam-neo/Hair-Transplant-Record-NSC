@@ -3,12 +3,40 @@ function followUpAction_(u,a,p){
     requirePermission_(u,'followups.create');
     if(!p.patientId||!p.followUpDate) throw clientError_('Patient and follow-up date are required.');
     var id=nextId_('FU'),now=new Date();
-    append_('FollowUps',{FollowUpID:id,PatientID:p.patientId,FollowUpDate:p.followUpDate,FollowUpType:p.followUpType||'Follow-up',Status:'Scheduled',AssignedTo:p.assignedTo||'',Notes:p.notes||'',CreatedBy:u.UserID,CreatedAt:now,UpdatedAt:now});
-    (p.recipients||[]).forEach(function(recipient){
-      if(recipient&&/^\S+@\S+\.\S+$/.test(recipient)) append_('Reminders',{ReminderID:nextId_('REM'),FollowUpID:id,Recipient:recipient,RecipientType:'Configured',ScheduledAt:p.reminderAt||now,Status:'Scheduled',CreatedAt:now,UpdatedAt:now});
-    });
-    audit_(u,p.patientId,'CREATE','FollowUp',id,'Follow-up scheduled');
-    return ok_({id:id});
+    var followUpRecord = {FollowUpID:id,PatientID:p.patientId,FollowUpDate:p.followUpDate,FollowUpTime:p.followUpTime||'',FollowUpType:p.followUpType||'Follow-up',Status:'Scheduled',AssignedTo:p.assignedTo||'',Notes:p.notes||'',CreatedBy:u.UserID,CreatedAt:now,UpdatedAt:now};
+    append_('FollowUps',followUpRecord);
+
+    var patient = find_('Patients','PatientID',p.patientId);
+    var recipients = [];
+    if(Array.isArray(p.recipients)){
+      p.recipients.forEach(function(r){
+        if(r && typeof r === 'string'){
+          var clean = r.trim().toLowerCase();
+          if(/^\S+@\S+\.\S+$/.test(clean) && recipients.indexOf(clean) === -1){
+            recipients.push(clean);
+          }
+        }
+      });
+    }
+
+    // Send immediate branded confirmation email
+    var sendNow = p.sendEmailNow !== false && p.sendEmailNow !== 'false';
+    if(sendNow && recipients.length > 0){
+      sendFollowUpNotification_(recipients, patient, followUpRecord, false);
+    }
+
+    // Queue scheduled reminder for the follow-up date
+    var scheduleReminder = p.scheduleReminder !== false && p.scheduleReminder !== 'false';
+    if(scheduleReminder && recipients.length > 0){
+      var reminderDate = new Date(p.followUpDate + 'T09:00:00');
+      if(isNaN(reminderDate.getTime())) reminderDate = now;
+      recipients.forEach(function(recipient){
+        append_('Reminders',{ReminderID:nextId_('REM'),FollowUpID:id,Recipient:recipient,RecipientType:'Configured',ScheduledAt:reminderDate,Status:'Scheduled',CreatedAt:now,UpdatedAt:now});
+      });
+    }
+
+    audit_(u,p.patientId,'CREATE','FollowUp',id,'Follow-up scheduled with ' + recipients.length + ' notification recipient(s)');
+    return ok_({id:id, recipientsCount: recipients.length});
   }
   if(a==='followups.update'){
     requirePermission_(u,'followups.edit');
