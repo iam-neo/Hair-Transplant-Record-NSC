@@ -296,7 +296,7 @@ export function RecordWorkspace({ module }: { module: string }) {
             </thead>
             <tbody>
               {items.length ? items.map((r, i) => (
-                <tr key={r[config.columns[0]] || i}>
+                <tr key={r[config.idColumn] || `${r.PatientID || 'item'}-${i}`}>
                   {config.columns.map(c => {
                     if (c === 'PatientID') {
                       const pid = String(r[c] || '').trim();
