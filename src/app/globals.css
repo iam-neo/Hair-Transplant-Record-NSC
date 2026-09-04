@@ -26,3 +26,22 @@
 @media(max-width:800px){.login{display:block}.login-brand{display:none}.mobile-logo{display:block}.app-shell{grid-template-columns:1fr}.sidebar{display:none}.topbar{padding:0 16px}.content{padding:18px}.metrics{grid-template-columns:repeat(2,1fr)}.grid2{grid-template-columns:1fr}.page-title{align-items:flex-start;flex-direction:column}.toolbar{align-items:stretch;flex-direction:column}.toolbar input{min-width:0}.upload-grid{grid-template-columns:repeat(3,1fr);gap:10px}}
 @media(max-width:480px){.upload-grid{grid-template-columns:repeat(2,1fr);gap:8px}}
 
+/* ─── View Switcher Tabs ─── */
+.view-tabs{display:flex;gap:8px;margin-bottom:18px;border-bottom:1px solid var(--border);padding-bottom:10px}
+.view-tab-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;border:1px solid transparent;background:transparent;color:var(--muted);transition:all .15s ease}
+.view-tab-btn:hover{background:#edf7fb;color:var(--primary-dark)}
+.view-tab-btn.active{background:var(--primary);color:#fff;box-shadow:0 2px 6px rgba(16,159,210,.25)}
+
+/* ─── Timeline Matrix Slots ─── */
+.matrix-slot-card{transition:all .2s ease}
+.matrix-slot-card:hover{transform:translateY(-2px);box-shadow:0 6px 14px rgba(0,0,0,.15)}
+.matrix-slot-actions{position:absolute;inset:0;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;gap:6px;opacity:0;transition:opacity .2s ease;backdrop-filter:blur(2px)}
+.matrix-slot-card:hover .matrix-slot-actions{opacity:1}
+.btn-icon-slot{width:28px;height:28px;border-radius:6px;border:0;background:rgba(255,255,255,.95);display:grid;place-items:center;font-size:13px;cursor:pointer;transition:transform .15s,background .15s}
+.btn-icon-slot:hover{transform:scale(1.12);background:#fff}
+
+@media(max-width:768px){
+  .preview-lightbox-body{grid-template-columns:1fr !important;max-height:85vh !important;overflow-y:auto !important}
+}
+
+

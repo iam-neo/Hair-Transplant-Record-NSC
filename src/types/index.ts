@@ -4,3 +4,31 @@ export interface SessionUser { id: string; name: string; email: string; role: Ro
 export interface Patient { id: string; fullName: string; dateOfBirth?: string; gender?: string; contactNumber: string; email?: string; address?: string; registrationDate: string; status: "Active" | "Completed" | "Archived"; lastActivity?: string; notes?: string }
 export interface ApiResult<T> { ok: boolean; data?: T; error?: string; code?: string }
 export interface DashboardData { patients: number; proceduresThisMonth: number; upcomingFollowUps: number; outstandingBalance: number; followUps: { id: string; patient: string; date: string; type: string; status: string }[] }
+
+export interface PhotoRecord {
+  PhotoID: string;
+  PhotoSessionID?: string;
+  PatientID: string;
+  SessionType?: string;
+  Category: string;
+  PhotoDate?: string;
+  FileName: string;
+  DriveFileID?: string;
+  MimeType?: string;
+  Size?: number;
+  Notes?: string;
+  CreatedAt: string;
+}
+
+export interface DocumentRecord {
+  DocumentID: string;
+  PatientID: string;
+  DocumentType: string;
+  FileName: string;
+  DriveFileID?: string;
+  MimeType?: string;
+  Size?: number;
+  Notes?: string;
+  CreatedBy?: string;
+  CreatedAt: string;
+}

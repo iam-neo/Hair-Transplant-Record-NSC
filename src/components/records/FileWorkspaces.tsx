@@ -5,7 +5,10 @@ import { api } from "@/lib/api/client";
 import { sessionStore } from "@/lib/auth/session";
 import { ConfirmDialog } from "@/components/ui/Modal";
 import { PatientSelect } from "@/components/ui/PatientSelect";
-import type { Patient } from "@/types";
+import { FilePreviewModal } from "./FilePreviewModal";
+import { FileEditModal } from "./FileEditModal";
+import { TimelineMatrix } from "./TimelineMatrix";
+import type { Patient, PhotoRecord, DocumentRecord } from "@/types";
 
 /* ─── Helpers ─── */
 function asBase64(file: File) {
@@ -24,7 +27,7 @@ function previewUrl(file: File): string {
 /* ─── Slot Definitions ─── */
 const PHOTO_SLOTS = [
   { key: 'Front', label: 'Front', icon: '🧑' },
-  { key: 'Top', label: 'Top', icon: '⬆️' },
+  { key: 'Top / Crown', label: 'Top / Crown', icon: '⬆️' },
   { key: 'Left', label: 'Left', icon: '◀️' },
   { key: 'Right', label: 'Right', icon: '▶️' },
   { key: 'Back / Donor', label: 'Back / Donor', icon: '🔙' },
@@ -32,12 +35,12 @@ const PHOTO_SLOTS = [
 ];
 
 const DOCUMENT_SLOTS = [
-  { key: 'Consultation / OPD Card', label: 'Consultation / OPD Card', icon: '🩺' },
+  { key: 'Consultation / OPD Card', label: 'Consultation', icon: '🩺' },
   { key: 'Blood Test', label: 'Blood Test', icon: '🩸' },
   { key: 'Biopsy', label: 'Biopsy', icon: '🔬' },
   { key: 'Consent Form', label: 'Consent Form', icon: '📝' },
   { key: 'Prescription', label: 'Prescription', icon: '💊' },
-  { key: 'Other', label: 'Other', icon: '📄' },
+  { key: 'Other', label: 'Other Doc', icon: '📄' },
 ];
 
 /* ─── Upload Slot Component ─── */
@@ -168,11 +171,15 @@ export function FilesWorkspace({ kind }: { kind: 'photos' | 'documents' }) {
   const slots = photo ? PHOTO_SLOTS : DOCUMENT_SLOTS;
   const accept = photo ? 'image/jpeg,image/png,image/webp' : 'application/pdf,image/*';
 
+  // Navigation tab for photos
+  const [viewTab, setViewTab] = useState<'upload' | 'matrix' | 'register'>('upload');
+
   const [items, setItems] = useState<Record<string, string>[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [, setSessions] = useState<Record<string, string>[]>([]);
   const [patientId, setPatientId] = useState('');
-  const [sessionType, setSessionType] = useState('Other');
+  const [sessionType, setSessionType] = useState('Before Transplant');
+  const [photoDate, setPhotoDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
   const [feedback, setFeedback] = useState('');
@@ -194,13 +201,17 @@ export function FilesWorkspace({ kind }: { kind: 'photos' | 'documents' }) {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
 
+  // Preview & Edit Modals state
+  const [previewTarget, setPreviewTarget] = useState<PhotoRecord | DocumentRecord | null>(null);
+  const [editTarget, setEditTarget] = useState<PhotoRecord | DocumentRecord | null>(null);
+
   // Delete state
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
 
   const s = sessionStore.get();
 
-  const load = () => {
+  const load = useCallback(() => {
     if (s) {
       api<{ items: Record<string, string>[]; sessions?: Record<string, string>[] }>(photo ? 'photos.list' : 'documents.list', {}, s.token)
         .then(r => { setItems(r.items); setSessions(r.sessions || []); })
@@ -210,16 +221,18 @@ export function FilesWorkspace({ kind }: { kind: 'photos' | 'documents' }) {
         .then(res => setPatients(res.items || []))
         .catch(() => {});
     }
-  };
+  }, [s, photo]);
 
   useEffect(() => {
     load();
     if (typeof window !== 'undefined') {
       const pId = new URLSearchParams(window.location.search).get('patientId');
-      if (pId) setPatientId(pId);
+      if (pId) {
+        setPatientId(pId);
+        if (photo) setViewTab('matrix');
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [load, photo]);
 
   const patientMap = useMemo(() => {
     const map: Record<string, Patient> = {};
@@ -227,56 +240,73 @@ export function FilesWorkspace({ kind }: { kind: 'photos' | 'documents' }) {
     return map;
   }, [patients]);
 
-  const filledSlots = Object.entries(slotFiles).filter(([, v]) => v !== null);
-  const filledCount = filledSlots.length;
+  const filledCount = useMemo(() => {
+    return Object.values(slotFiles).filter(Boolean).length;
+  }, [slotFiles]);
 
   const setFileForSlot = (key: string, file: File) => {
-    const preview = file.type.startsWith('image/') ? previewUrl(file) : undefined;
-    setSlotFiles(prev => ({ ...prev, [key]: { file, preview } }));
+    setSlotFiles(prev => {
+      if (prev[key]?.preview) URL.revokeObjectURL(prev[key]!.preview!);
+      return {
+        ...prev,
+        [key]: {
+          file,
+          preview: file.type.startsWith('image/') ? previewUrl(file) : undefined,
+        },
+      };
+    });
     setSlotStatus(prev => ({ ...prev, [key]: 'idle' }));
-    setFeedback('');
   };
 
   const removeFileFromSlot = (key: string) => {
-    if (slotFiles[key]?.preview) URL.revokeObjectURL(slotFiles[key]!.preview!);
-    setSlotFiles(prev => ({ ...prev, [key]: null }));
+    setSlotFiles(prev => {
+      if (prev[key]?.preview) URL.revokeObjectURL(prev[key]!.preview!);
+      return { ...prev, [key]: null };
+    });
     setSlotStatus(prev => ({ ...prev, [key]: 'idle' }));
   };
 
   const resetAll = () => {
-    Object.entries(slotFiles).forEach(([, v]) => {
-      if (v?.preview) URL.revokeObjectURL(v.preview);
+    Object.values(slotFiles).forEach(sf => {
+      if (sf?.preview) URL.revokeObjectURL(sf.preview);
     });
-    const init: Record<string, SlotFile | null> = {};
+    const initFiles: Record<string, SlotFile | null> = {};
     const initStatus: Record<string, SlotStatus> = {};
-    slots.forEach(sl => { init[sl.key] = null; initStatus[sl.key] = 'idle'; });
-    setSlotFiles(init);
+    slots.forEach(slot => {
+      initFiles[slot.key] = null;
+      initStatus[slot.key] = 'idle';
+    });
+    setSlotFiles(initFiles);
     setSlotStatus(initStatus);
     setNotes('');
-    setUploadProgress({ current: 0, total: 0 });
   };
 
   async function uploadAll() {
-    if (!s) return;
     if (!patientId) {
       setError('Please select a registered patient before uploading.');
       return;
     }
-    if (filledCount === 0) {
-      setError('Please add at least one file to upload.');
+
+    const entries = Object.entries(slotFiles).filter(([, sf]) => sf !== null) as [string, SlotFile][];
+    if (entries.length === 0) {
+      setError('Please choose or drag at least one file into a slot.');
+      return;
+    }
+
+    if (!s) {
+      setError('Session expired. Please log in again.');
       return;
     }
 
     setUploading(true);
     setError('');
     setFeedback('');
-    setUploadProgress({ current: 0, total: filledCount });
+    setUploadProgress({ current: 0, total: entries.length });
 
     let successCount = 0;
     let failCount = 0;
 
-    for (const [key, slotFile] of filledSlots) {
-      if (!slotFile) continue;
+    for (const [key, slotFile] of entries) {
       setSlotStatus(prev => ({ ...prev, [key]: 'uploading' }));
       setUploadProgress(prev => ({ ...prev, current: prev.current + 1 }));
 
@@ -290,6 +320,7 @@ export function FilesWorkspace({ kind }: { kind: 'photos' | 'documents' }) {
             fileName: slotFile.file.name,
             extension: slotFile.file.name.split('.').pop(),
             sessionType,
+            photoDate,
             category: key,
             notes,
           }, s.token);
@@ -315,8 +346,8 @@ export function FilesWorkspace({ kind }: { kind: 'photos' | 'documents' }) {
     setUploading(false);
 
     if (failCount === 0) {
-      setFeedback(`✅ All ${successCount} file(s) uploaded successfully to Google Drive!`);
-      setTimeout(() => { resetAll(); load(); }, 1500);
+      setFeedback(`✅ All ${successCount} file(s) uploaded successfully!`);
+      setTimeout(() => { resetAll(); load(); }, 1200);
     } else {
       setError(`${failCount} file(s) failed to upload. ${successCount} succeeded. Please retry the failed ones.`);
       load();
@@ -337,8 +368,8 @@ export function FilesWorkspace({ kind }: { kind: 'photos' | 'documents' }) {
     <AppShell title={photo ? 'Photos' : 'Documents'}>
       <div className="page-title">
         <div>
-          <h2>{photo ? 'Photo documentation' : 'Patient documents'}</h2>
-          <p className="subtle">Files are uploaded directly to private patient folders in Google Drive.</p>
+          <h2>{photo ? 'Hair Transplant Photo Documentation' : 'Patient Documents'}</h2>
+          <p className="subtle">Files are securely archived and tracked across clinical milestones.</p>
         </div>
       </div>
 
@@ -349,129 +380,273 @@ export function FilesWorkspace({ kind }: { kind: 'photos' | 'documents' }) {
       )}
       {error && <div className="form-error">{error}</div>}
 
-      {/* Upload Section */}
-      <section className="panel">
-        <h3>{photo ? '📸 Upload patient photos' : '📄 Upload patient documents'}</h3>
-        <p className="subtle" style={{ marginTop: '-8px', marginBottom: '16px' }}>
-          {photo
-            ? 'Select a patient, then add photos for each angle. You can drag-and-drop or click each square to browse.'
-            : 'Select a patient, then add documents for each category. You can drag-and-drop or click each square to browse.'}
-        </p>
-
-        {/* Patient & Session Selection */}
-        <div className="grid2" style={{ marginBottom: '16px' }}>
-          <div style={{ gridColumn: '1 / -1' }}>
-            <PatientSelect
-              value={patientId}
-              onChange={(id) => setPatientId(id)}
-              required
-              initialPatients={patients}
-              label="Select Registered Patient"
-              placeholder="Type patient name, phone number, or ID to attach files to..."
-            />
-          </div>
-          {photo && (
-            <label className="field" style={{ marginTop: '8px' }}>
-              Session type
-              <select value={sessionType} onChange={e => setSessionType(e.target.value)}>
-                {['Before Transplant', 'Day of Transplant', 'After Transplant', 'Follow-up', 'Review', 'Routine Visit', 'Other'].map(x => <option key={x}>{x}</option>)}
-              </select>
-            </label>
-          )}
-        </div>
-
-        {/* Upload Slots Grid */}
-        <div className="upload-grid">
-          {slots.map(slot => (
-            <UploadSlot
-              key={slot.key}
-              slotKey={slot.key}
-              label={slot.label}
-              icon={slot.icon}
-              accept={accept}
-              slotFile={slotFiles[slot.key]}
-              status={slotStatus[slot.key]}
-              onFileSelect={(file) => setFileForSlot(slot.key, file)}
-              onRemove={() => removeFileFromSlot(slot.key)}
-            />
-          ))}
-        </div>
-
-        {/* Notes */}
-        <label className="field" style={{ marginTop: '12px' }}>
-          Notes (optional — applies to all uploads)
-          <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any notes about this upload batch..." />
-        </label>
-
-        {/* Upload Progress */}
-        {uploading && (
-          <div style={{ marginTop: '12px' }}>
-            <div className="upload-progress-bar">
-              <div className="upload-progress-fill" style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }} />
-            </div>
-            <div className="upload-status">
-              <span>⏳</span>
-              <span>Uploading {uploadProgress.current} of {uploadProgress.total}...</span>
-            </div>
-          </div>
-        )}
-
-        {/* Upload Button */}
-        <div className="actions" style={{ justifyContent: 'flex-start', marginTop: '16px' }}>
+      {/* Photo Workspace View Switcher Tabs */}
+      {photo && (
+        <div className="view-tabs">
           <button
-            className="button"
-            disabled={!patientId || filledCount === 0 || uploading}
-            onClick={uploadAll}
+            type="button"
+            className={`view-tab-btn ${viewTab === 'upload' ? 'active' : ''}`}
+            onClick={() => setViewTab('upload')}
           >
-            {uploading
-              ? `Uploading ${uploadProgress.current}/${uploadProgress.total}…`
-              : `Upload ${filledCount} ${photo ? 'photo' : 'document'}${filledCount !== 1 ? 's' : ''} securely`}
+            📸 Multi-Slot Upload
           </button>
-          {filledCount > 0 && !uploading && (
-            <button type="button" className="button secondary" onClick={resetAll}>
-              Clear all
-            </button>
-          )}
+          <button
+            type="button"
+            className={`view-tab-btn ${viewTab === 'matrix' ? 'active' : ''}`}
+            onClick={() => setViewTab('matrix')}
+          >
+            📊 Timeline Comparison Matrix
+          </button>
+          <button
+            type="button"
+            className={`view-tab-btn ${viewTab === 'register' ? 'active' : ''}`}
+            onClick={() => setViewTab('register')}
+          >
+            📋 Photo Register ({items.length})
+          </button>
         </div>
-      </section>
+      )}
+
+      {/* VIEW: Timeline Comparison Matrix (Photos Only) */}
+      {photo && viewTab === 'matrix' && (
+        <TimelineMatrix
+          photos={items as unknown as PhotoRecord[]}
+          patients={patients}
+          selectedPatientId={patientId}
+          onSelectPatient={(id) => setPatientId(id)}
+          token={s?.token}
+          onPreview={(ph) => setPreviewTarget(ph)}
+          onEdit={(ph) => setEditTarget(ph)}
+          onUploadForSlot={(stage) => {
+            setSessionType(stage);
+            setViewTab('upload');
+          }}
+        />
+      )}
+
+      {/* VIEW: Upload Section */}
+      {(!photo || viewTab === 'upload') && (
+        <section className="panel">
+          <h3>{photo ? '📸 Upload patient photos (6 Angles)' : '📄 Upload patient documents'}</h3>
+          <p className="subtle" style={{ marginTop: '-8px', marginBottom: '16px' }}>
+            {photo
+              ? 'Select a patient and the timeline stage, set the capture date, then drop or browse photos into the angle slots.'
+              : 'Select a patient, then add documents for each category. You can drag-and-drop or click each square to browse.'}
+          </p>
+
+          {/* Patient, Stage & Date Selection */}
+          <div className="grid2" style={{ marginBottom: '16px' }}>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <PatientSelect
+                value={patientId}
+                onChange={(id) => setPatientId(id)}
+                required
+                initialPatients={patients}
+                label="Select Registered Patient"
+                placeholder="Type patient name, phone number, or ID to attach files to..."
+              />
+            </div>
+            {photo && (
+              <>
+                <label className="field" style={{ marginTop: '8px' }}>
+                  Timeline Stage / Milestone
+                  <select value={sessionType} onChange={e => setSessionType(e.target.value)}>
+                    {[
+                      'Before Transplant',
+                      'Day of Transplant',
+                      'After Transplant',
+                      'Follow-up 1 (1 Month)',
+                      'Follow-up 2 (3 Months)',
+                      'Follow-up 3 (6 Months)',
+                      'Follow-up 4 (1 Year)',
+                      'Follow-up',
+                      'Review',
+                      'Routine Visit',
+                      'Other'
+                    ].map(x => <option key={x} value={x}>{x}</option>)}
+                  </select>
+                </label>
+
+                <label className="field" style={{ marginTop: '8px' }}>
+                  Date Clicked / Taken
+                  <input
+                    type="date"
+                    value={photoDate}
+                    onChange={e => setPhotoDate(e.target.value)}
+                    required
+                  />
+                </label>
+              </>
+            )}
+          </div>
+
+          {/* Upload Slots Grid (Single row, 6 slots) */}
+          <div className="upload-grid">
+            {slots.map(slot => (
+              <UploadSlot
+                key={slot.key}
+                slotKey={slot.key}
+                label={slot.label}
+                icon={slot.icon}
+                accept={accept}
+                slotFile={slotFiles[slot.key]}
+                status={slotStatus[slot.key]}
+                onFileSelect={(file) => setFileForSlot(slot.key, file)}
+                onRemove={() => removeFileFromSlot(slot.key)}
+              />
+            ))}
+          </div>
+
+          {/* Notes */}
+          <label className="field" style={{ marginTop: '12px' }}>
+            Clinical Notes (optional — applies to all uploads in this batch)
+            <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Observations, follicle condition, graft retention..." />
+          </label>
+
+          {/* Upload Progress */}
+          {uploading && (
+            <div style={{ marginTop: '12px' }}>
+              <div className="upload-progress-bar">
+                <div className="upload-progress-fill" style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }} />
+              </div>
+              <div className="upload-status">
+                <span>⏳</span>
+                <span>Uploading {uploadProgress.current} of {uploadProgress.total}...</span>
+              </div>
+            </div>
+          )}
+
+          {/* Upload Button */}
+          <div className="actions" style={{ justifyContent: 'flex-start', marginTop: '16px' }}>
+            <button
+              className="button"
+              disabled={!patientId || filledCount === 0 || uploading}
+              onClick={uploadAll}
+            >
+              {uploading
+                ? `Uploading ${uploadProgress.current}/${uploadProgress.total}…`
+                : `Upload ${filledCount} ${photo ? 'photo' : 'document'}${filledCount !== 1 ? 's' : ''} securely`}
+            </button>
+            {filledCount > 0 && !uploading && (
+              <button type="button" className="button secondary" onClick={resetAll}>
+                Clear all
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Files Register Table */}
-      <section className="panel">
-        <h3>{photo ? 'Photo' : 'Document'} register</h3>
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Patient</th>
-                <th>File</th>
-                <th>Type</th>
-                <th>Created</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.length ? items.map(x => (
-                <tr key={x.PhotoID || x.DocumentID}>
-                  <td>
-                    <strong style={{ color: 'var(--navy)' }}>{x.PatientID}</strong>
-                    {patientMap[x.PatientID] && (
-                      <div style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 500 }}>
-                        {patientMap[x.PatientID].fullName}
-                      </div>
-                    )}
-                  </td>
-                  <td>{x.FileName}</td>
-                  <td>{x.Category || x.DocumentType}</td>
-                  <td>{x.CreatedAt}</td>
-                  <td className="row-actions">
-                    <button className="btn-icon" title="Delete" onClick={() => setDeleteTarget({ id: x.PhotoID || x.DocumentID, label: x.FileName })}>🗑️</button>
-                  </td>
+      {(!photo || viewTab === 'register' || viewTab === 'upload') && (
+        <section className="panel" style={{ marginTop: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+            <h3 style={{ margin: 0 }}>{photo ? '📸 Photo Register' : '📄 Document Register'}</h3>
+            <span className="badge-muted">{items.length} total file(s)</span>
+          </div>
+
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Patient</th>
+                  <th>File Name</th>
+                  <th>{photo ? 'Timeline & Angle' : 'Category'}</th>
+                  {photo && <th>Date Clicked</th>}
+                  <th>Uploaded At</th>
+                  <th>Actions</th>
                 </tr>
-              )) : <tr><td colSpan={5} className="empty">No files yet.</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody>
+                {items.length ? items.map(x => (
+                  <tr key={x.PhotoID || x.DocumentID}>
+                    <td>
+                      <strong style={{ color: 'var(--navy)' }}>{x.PatientID}</strong>
+                      {patientMap[x.PatientID] && (
+                        <div style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 500 }}>
+                          {patientMap[x.PatientID].fullName}
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      <span
+                        style={{ cursor: 'pointer', color: 'var(--primary-dark)', fontWeight: 600 }}
+                        onClick={() => setPreviewTarget(x as unknown as (PhotoRecord | DocumentRecord))}
+                        title="Click to preview"
+                      >
+                        {x.FileName}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        {x.SessionType && (
+                          <span className="badge" style={{ fontSize: '10.5px', alignSelf: 'flex-start' }}>
+                            {x.SessionType}
+                          </span>
+                        )}
+                        <span style={{ fontSize: '12px', fontWeight: 600 }}>
+                          {x.Category || x.DocumentType}
+                        </span>
+                      </div>
+                    </td>
+                    {photo && (
+                      <td>
+                        <strong style={{ color: 'var(--ink)' }}>
+                          {x.PhotoDate || (x.CreatedAt ? String(x.CreatedAt).slice(0, 10) : '—')}
+                        </strong>
+                      </td>
+                    )}
+                    <td>{x.CreatedAt}</td>
+                    <td className="row-actions">
+                      <button
+                        className="btn-icon"
+                        title="Preview file"
+                        onClick={() => setPreviewTarget(x as unknown as (PhotoRecord | DocumentRecord))}
+                      >
+                        👁️
+                      </button>
+                      <button
+                        className="btn-icon"
+                        title="Edit metadata"
+                        onClick={() => setEditTarget(x as unknown as (PhotoRecord | DocumentRecord))}
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        className="btn-icon"
+                        title="Delete"
+                        onClick={() => setDeleteTarget({ id: x.PhotoID || x.DocumentID, label: x.FileName })}
+                      >
+                        🗑️
+                      </button>
+                    </td>
+                  </tr>
+                )) : <tr><td colSpan={photo ? 6 : 5} className="empty">No files yet.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* High-Resolution Lightbox Preview Modal */}
+      <FilePreviewModal
+        open={!!previewTarget}
+        onClose={() => setPreviewTarget(null)}
+        item={previewTarget}
+        type={photo ? 'photo' : 'document'}
+        token={s?.token}
+        patientName={previewTarget ? patientMap[previewTarget.PatientID]?.fullName : undefined}
+        onEditRequest={(item) => setEditTarget(item)}
+      />
+
+      {/* Edit Metadata Modal */}
+      <FileEditModal
+        open={!!editTarget}
+        onClose={() => setEditTarget(null)}
+        item={editTarget}
+        type={photo ? 'photo' : 'document'}
+        token={s?.token}
+        onSaved={load}
+      />
 
       {/* Delete Confirmation */}
       <ConfirmDialog

@@ -29,6 +29,7 @@ function followUpAction_(u,a,p){
     if(sendNow && recipients.length > 0){
       sendFollowUpNotification_(recipients, patient, followUpRecord, false);
     }
+    
 
     // Queue scheduled reminder for the follow-up date
     var scheduleReminder = p.scheduleReminder !== false && p.scheduleReminder !== 'false';
